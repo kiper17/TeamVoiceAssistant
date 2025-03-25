@@ -1,0 +1,420 @@
+/* Базовые стили */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f5f5;
+}
+
+.voice-assistant-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Кнопка создания команд */
+.team-creator-button {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #34a853;
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  z-index: 100;
+}
+
+.team-creator-button:hover {
+  transform: scale(1.1);
+  background: #2d9248;
+}
+
+.team-icon {
+  width: 30px;
+  height: 30px;
+}
+
+/* Основной интерфейс */
+.main-interface {
+  display: flex;
+  gap: 30px;
+  margin-top: 80px;
+}
+
+/* Блок с командами */
+.teams-ranking {
+  width: 300px;
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  height: fit-content;
+}
+
+.teams-ranking h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.team-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background: #f9f9f9;
+  cursor: pointer;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.team-header:hover {
+  background: #f0f0f0;
+}
+
+.team-name {
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.team-points {
+  font-weight: bold;
+  color: #4285f4;
+  font-size: 0.9rem;
+}
+
+.team-toggle {
+  font-size: 12px;
+  color: #666;
+  margin-left: 10px;
+}
+
+.team-members {
+  padding: 15px;
+  background: white;
+  border-top: 1px solid #eee;
+}
+
+.team-members h4 {
+  margin: 0 0 10px 0;
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.team-members ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.team-members li {
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
+
+/* Центральный блок управления */
+.center-block {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+/* Кнопка микрофона */
+.mic-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.mic-button {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #4285f4;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+.mic-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(66, 133, 244, 0.4);
+}
+
+.mic-button.active {
+  background: #db4437;
+  box-shadow: 0 4px 12px rgba(219, 68, 55, 0.3);
+  animation: pulse 1.5s infinite;
+}
+
+.mic-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.mic-status {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Блок вывода текста */
+.output {
+  width: 100%;
+  max-width: 600px;
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.output h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.text-content {
+  min-height: 100px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* Модальное окно */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.team-creator-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.team-creator-modal h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 1.3rem;
+}
+
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.number-input {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.number-control {
+  width: 40px;
+  height: 40px;
+  border: 2px solid #000;
+  background: white;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.number-control.minus {
+  color: #000;
+}
+
+.number-control.plus {
+  color: #000;
+}
+
+.number-control:hover {
+  background: #f0f0f0;
+}
+
+.number-control:active {
+  transform: scale(0.95);
+}
+
+.number-input-field {
+  width: 60px;
+  padding: 10px;
+  border: 2px solid #000;
+  border-radius: 20px;
+  text-align: center;
+  font-size: 1rem;
+  margin: 0 8px;
+  font-weight: 500;
+}
+
+/* Кнопки модального окна */
+.modal-buttons {
+  display: flex;
+  justify-content: center; /* Изменили с flex-end на center */
+  gap: 12px;
+  margin-top: 25px;
+}
+
+.create-button {
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #4d4c4c;
+  color: white;
+  border: none;
+}
+
+.cancel-button {
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+  color: #000;
+  border: 2px solid #000;
+}
+
+.create-button, .cancel-button {
+  min-width: 120px; /* Фиксированная ширина для кнопок */
+  text-align: center;
+}
+
+.modal-buttons button:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.modal-buttons button:active {
+  transform: translateY(0);
+}
+
+/* Сообщение о неподдерживаемом браузере */
+.browser-warning {
+  color: #d32f2f;
+  padding: 20px;
+  text-align: center;
+  max-width: 500px;
+  margin: 100px auto;
+  background: #ffebee;
+  border-radius: 8px;
+}
+
+/* Кнопки управления очками */
+.team-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.points-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #ddd;
+  background: white;
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.points-button:hover {
+  transform: scale(1.1);
+}
+
+.points-button.plus {
+  color: #2ecc71;
+  border-color: #2ecc71;
+}
+
+.points-button.minus {
+  color: #e74c3c;
+  border-color: #e74c3c;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.mic-button.active {
+  animation: pulse 1.5s infinite;
+}
