@@ -7,6 +7,54 @@ import {
 import { db } from '../firebase';
 import './VoiceAssistant.css';
 
+// Добавляем типы для Telegram WebApp
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp: {
+        initData: string;
+        initDataUnsafe: {
+          user?: {
+            id: number;
+            first_name?: string;
+            last_name?: string;
+            username?: string;
+            language_code?: string;
+          };
+        };
+        version: string;
+        platform: string;
+        colorScheme: string;
+        themeParams: Record<string, string>;
+        isExpanded: boolean;
+        viewportHeight: number;
+        headerColor: string;
+        backgroundColor: string;
+        BackButton: {
+          show: () => void;
+          hide: () => void;
+          onClick: (callback: () => void) => void;
+          offClick: (callback: () => void) => void;
+        };
+        MainButton: {
+          show: () => void;
+          hide: () => void;
+          setText: (text: string) => void;
+          onClick: (callback: () => void) => void;
+          offClick: (callback: () => void) => void;
+          showProgress: () => void;
+          hideProgress: () => void;
+        };
+        requestPermission: (
+          permission: string,
+          callback: (granted: boolean) => void
+        ) => void;
+        expand: () => void;
+      };
+    };
+  }
+}
+
 type Team = {
   id: string;
   name: string;
@@ -23,8 +71,35 @@ const VoiceAssistant = () => {
   const [teamCount, setTeamCount] = useState(2);
   const [peopleCount, setPeopleCount] = useState(4);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [isTGWebView, setIsTGWebView] = useState(false);
+  const [micPermissionGranted, setMicPermissionGranted] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Проверка на Telegram WebView и запрос разрешений
+  useEffect(() => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isTelegram = userAgent.includes('telegram');
+    setIsTGWebView(isTelegram);
+
+    if (isTelegram && window.Telegram?.WebApp) {
+      const tgWebApp = window.Telegram.WebApp;
+      
+      // Расширяем WebView на весь экран
+      tgWebApp.expand();
+      
+      // Запрашиваем разрешение на микрофон
+      tgWebApp.requestPermission('microphone', (granted) => {
+        setMicPermissionGranted(granted);
+        if (!granted) {
+          alert("Для работы голосового ассистента разрешите доступ к микрофону в настройках Telegram");
+        }
+      });
+    } else {
+      // Для обычного браузера сразу считаем разрешение полученным
+      setMicPermissionGranted(true);
+    }
+  }, []);
 
   // Подписка на данные Firestore
   useEffect(() => {
@@ -42,6 +117,48 @@ const VoiceAssistant = () => {
     return () => unsubscribe();
   }, []);
 
+  // Инициализация голосового помощника
+  useEffect(() => {
+    if (!micPermissionGranted) return;
+
+    const initVoiceRecognition = () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setIsSupported(false);
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ru-RU';
+      recognition.interimResults = false;
+      recognition.continuous = true;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setText(transcript);
+        handleVoiceCommand(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Ошибка распознавания:', event.error);
+        if (event.error === 'no-speech' && isListening) {
+          recognition.start();
+        }
+      };
+
+      if (isListening) {
+        recognition.start();
+      }
+
+      return () => {
+        recognition.stop();
+      };
+    };
+
+    const cleanup = initVoiceRecognition();
+    return cleanup;
+  }, [isListening, micPermissionGranted]);
+
   // Функция обновления очков
   const updateTeamPoints = async (teamId: string, delta: number) => {
     try {
@@ -54,7 +171,7 @@ const VoiceAssistant = () => {
     }
   };
 
-  // Обработка голосовых команд (работает с номерами команд)
+  // Обработка голосовых команд
   const handleVoiceCommand = async (command: string) => {
     const normalizedCommand = command.toLowerCase().trim();
     
@@ -71,7 +188,6 @@ const VoiceAssistant = () => {
         points = -points;
       }
       
-      // Ищем команду по номеру (например "Команда 1")
       const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
       
       if (teamToUpdate) {
@@ -84,41 +200,6 @@ const VoiceAssistant = () => {
       setText(`Не распознано: ${command}`);
     }
   };
-
-  // Инициализация голосового распознавания
-  useEffect(() => {
-    if (!isListening) return;
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsSupported(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ru-RU';
-    recognition.interimResults = false;
-    recognition.continuous = true;
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setText(transcript);
-      handleVoiceCommand(transcript);
-    };
-
-    recognition.onerror = (event) => {
-      console.error('Ошибка распознавания:', event.error);
-      if (event.error === 'no-speech') {
-        recognition.start();
-      }
-    };
-
-    recognition.start();
-
-    return () => {
-      recognition.stop();
-    };
-  }, [isListening, teams]);
 
   // Создание команд
   const createTeams = async () => {
@@ -180,6 +261,15 @@ const VoiceAssistant = () => {
     if (value === '' || /^\d+$/.test(value)) {
       setPeopleCount(value === '' ? 0 : parseInt(value));
     }
+  };
+
+  // Обработчик кнопки микрофона
+  const handleMicClick = () => {
+    if (isTGWebView && !micPermissionGranted) {
+      alert("Пожалуйста, разрешите доступ к микрофону в настройках Telegram");
+      return;
+    }
+    setIsListening(!isListening);
   };
 
   if (!isSupported) {
@@ -262,16 +352,21 @@ const VoiceAssistant = () => {
           <div className="mic-container">
             <button 
               ref={buttonRef}
-              onClick={() => setIsListening(!isListening)}
+              onClick={handleMicClick}
               className={`mic-button ${isListening ? 'active' : ''}`}
               aria-label={isListening ? 'Остановить запись' : 'Начать запись'}
+              disabled={isTGWebView && !micPermissionGranted}
             >
               <svg className="mic-icon" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
               </svg>
             </button>
             <div className="mic-status">
-              {isListening ? 'Идет запись...' : 'Нажмите для записи'}
+              {isTGWebView && !micPermissionGranted 
+                ? 'Разрешите микрофон в настройках' 
+                : isListening 
+                  ? 'Идет запись...' 
+                  : 'Нажмите для записи'}
             </div>
           </div>
 
