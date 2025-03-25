@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   collection, addDoc, doc, updateDoc, 
   getDocs, deleteDoc, onSnapshot, 
-  increment, writeBatch
+  increment, writeBatch, query, where
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import './VoiceAssistant.css';
 
-// Добавляем типы для Telegram WebApp
 declare global {
   interface Window {
     Telegram?: {
@@ -22,29 +21,7 @@ declare global {
             language_code?: string;
           };
         };
-        version: string;
-        platform: string;
-        colorScheme: string;
-        themeParams: Record<string, string>;
-        isExpanded: boolean;
-        viewportHeight: number;
-        headerColor: string;
-        backgroundColor: string;
-        BackButton: {
-          show: () => void;
-          hide: () => void;
-          onClick: (callback: () => void) => void;
-          offClick: (callback: () => void) => void;
-        };
-        MainButton: {
-          show: () => void;
-          hide: () => void;
-          setText: (text: string) => void;
-          onClick: (callback: () => void) => void;
-          offClick: (callback: () => void) => void;
-          showProgress: () => void;
-          hideProgress: () => void;
-        };
+        showAlert: (message: string, callback?: () => void) => void;
         requestPermission: (
           permission: string,
           callback: (granted: boolean) => void
@@ -61,6 +38,7 @@ type Team = {
   members: number[];
   points: number;
   expanded: boolean;
+  ownerId: string;
 };
 
 const VoiceAssistant = () => {
@@ -73,10 +51,11 @@ const VoiceAssistant = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isTGWebView, setIsTGWebView] = useState(false);
   const [micPermissionGranted, setMicPermissionGranted] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Проверка на Telegram WebView и запрос разрешений
+  // Инициализация Telegram WebApp
   useEffect(() => {
     const userAgent = navigator.userAgent.toLowerCase();
     const isTelegram = userAgent.includes('telegram');
@@ -84,40 +63,51 @@ const VoiceAssistant = () => {
 
     if (isTelegram && window.Telegram?.WebApp) {
       const tgWebApp = window.Telegram.WebApp;
-      
-      // Расширяем WebView на весь экран
       tgWebApp.expand();
-      
+
+      // Получаем ID пользователя
+      const tgUser = tgWebApp.initDataUnsafe.user;
+      if (tgUser?.id) {
+        setUserId(tgUser.id.toString());
+      }
+
       // Запрашиваем разрешение на микрофон
       tgWebApp.requestPermission('microphone', (granted) => {
         setMicPermissionGranted(granted);
         if (!granted) {
-          alert("Для работы голосового ассистента разрешите доступ к микрофону в настройках Telegram");
+          tgWebApp.showAlert("Для работы голосового ассистента разрешите доступ к микрофону в настройках Telegram");
         }
       });
     } else {
-      // Для обычного браузера сразу считаем разрешение полученным
       setMicPermissionGranted(true);
     }
   }, []);
 
-  // Подписка на данные Firestore
+  // Подписка на команды пользователя
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'teams'), (snapshot) => {
+    if (!userId) return;
+
+    const teamsQuery = query(
+      collection(db, 'teams'),
+      where('ownerId', '==', userId)
+    );
+
+    const unsubscribe = onSnapshot(teamsQuery, (snapshot) => {
       const loadedTeams = snapshot.docs.map(doc => ({
         id: doc.id,
         name: doc.data().name,
         members: doc.data().members,
         points: doc.data().points,
-        expanded: false
+        expanded: false,
+        ownerId: doc.data().ownerId
       }));
       setTeams(loadedTeams);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [userId]);
 
-  // Инициализация голосового помощника
+  // Голосовой помощник
   useEffect(() => {
     if (!micPermissionGranted) return;
 
@@ -159,22 +149,27 @@ const VoiceAssistant = () => {
     return cleanup;
   }, [isListening, micPermissionGranted]);
 
-  // Функция обновления очков
   const updateTeamPoints = async (teamId: string, delta: number) => {
+    if (!userId) return;
+
     try {
       await updateDoc(doc(db, 'teams', teamId), {
         points: increment(delta)
       });
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
-      alert("Не удалось изменить очки");
+      if (isTGWebView) {
+        window.Telegram?.WebApp.showAlert("Не удалось изменить очки");
+      } else {
+        alert("Не удалось изменить очки");
+      }
     }
   };
 
-  // Обработка голосовых команд
   const handleVoiceCommand = async (command: string) => {
+    if (!userId) return;
+
     const normalizedCommand = command.toLowerCase().trim();
-    
     const match = normalizedCommand.match(
       /команда\s+(\d+)\s+(плюс|минус|\+|\-)\s*(\d+)/i
     );
@@ -201,10 +196,22 @@ const VoiceAssistant = () => {
     }
   };
 
-  // Создание команд
   const createTeams = async () => {
+    if (!userId) {
+      if (isTGWebView) {
+        window.Telegram?.WebApp.showAlert("Требуется авторизация в Telegram");
+      } else {
+        alert("Требуется авторизация");
+      }
+      return;
+    }
+
     if (teamCount === 0 || peopleCount === 0) {
-      alert('Количество команд и участников должно быть больше 0');
+      if (isTGWebView) {
+        window.Telegram?.WebApp.showAlert("Количество команд и участников должно быть больше 0");
+      } else {
+        alert("Количество команд и участников должно быть больше 0");
+      }
       return;
     }
     
@@ -212,11 +219,18 @@ const VoiceAssistant = () => {
     const shuffled = [...people].sort(() => 0.5 - Math.random());
     
     const batch = writeBatch(db);
-    const snapshot = await getDocs(collection(db, 'teams'));
+    
+    // Удаляем старые команды пользователя
+    const teamsQuery = query(
+      collection(db, 'teams'),
+      where('ownerId', '==', userId)
+    );
+    const snapshot = await getDocs(teamsQuery);
     snapshot.forEach(doc => {
       batch.delete(doc.ref);
     });
     
+    // Создаем новые команды
     for (let i = 0; i < teamCount; i++) {
       const members = shuffled.slice(
         Math.floor(i * shuffled.length / teamCount),
@@ -226,7 +240,8 @@ const VoiceAssistant = () => {
       batch.set(doc(collection(db, 'teams')), {
         name: `Команда ${i + 1}`,
         members,
-        points: 0
+        points: 0,
+        ownerId: userId
       });
     }
     
@@ -237,18 +252,20 @@ const VoiceAssistant = () => {
       setPeopleCount(4);
     } catch (error) {
       console.error("Ошибка создания команд:", error);
-      alert("Ошибка при создании команд");
+      if (isTGWebView) {
+        window.Telegram?.WebApp.showAlert("Ошибка при создании команд");
+      } else {
+        alert("Ошибка при создании команд");
+      }
     }
   };
 
-  // Переключение отображения участников
   const toggleTeamExpansion = (teamId: string) => {
     setTeams(teams.map(team => 
       team.id === teamId ? {...team, expanded: !team.expanded} : team
     ));
   };
 
-  // Обработчики изменения значений
   const handleTeamCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === '' || /^\d+$/.test(value)) {
@@ -263,10 +280,9 @@ const VoiceAssistant = () => {
     }
   };
 
-  // Обработчик кнопки микрофона
   const handleMicClick = () => {
     if (isTGWebView && !micPermissionGranted) {
-      alert("Пожалуйста, разрешите доступ к микрофону в настройках Telegram");
+      window.Telegram?.WebApp.showAlert("Пожалуйста, разрешите доступ к микрофону в настройках Telegram");
       return;
     }
     setIsListening(!isListening);
@@ -281,12 +297,21 @@ const VoiceAssistant = () => {
     );
   }
 
+  if (!userId && isTGWebView) {
+    return (
+      <div className="auth-warning">
+        Пожалуйста, авторизуйтесь через Telegram для использования приложения
+      </div>
+    );
+  }
+
   return (
     <div className="voice-assistant-container">
       <button 
         className="team-creator-button"
         onClick={() => setShowTeamCreator(true)}
         aria-label="Создать команды"
+        disabled={!userId}
       >
         <svg className="team-icon" viewBox="0 0 24 24">
           <path fill="currentColor" d="M16 17V19H2V17S2 13 9 13 16 17 16 17M12.5 7.5A3.5 3.5 0 1 0 9 11A3.5 3.5 0 0 0 12.5 7.5M15.94 13A5.32 5.32 0 0 1 18 17V19H22V17S22 13.37 15.94 13M15 4A3.39 3.39 0 0 0 13.07 4.59A5 5 0 0 1 13.07 10.41A3.39 3.39 0 0 0 15 11A3.5 3.5 0 0 0 15 4Z" />
@@ -294,7 +319,7 @@ const VoiceAssistant = () => {
       </button>
 
       <div className="main-interface">
-        {teams.length > 0 && (
+        {teams.length > 0 ? (
           <div className="teams-ranking">
             <h2>Рейтинг команд</h2>
             <div className="teams-list">
@@ -346,6 +371,10 @@ const VoiceAssistant = () => {
               ))}
             </div>
           </div>
+        ) : (
+          <div className="no-teams-message">
+            {userId ? "Создайте свои первые команды" : "Авторизуйтесь для создания команд"}
+          </div>
         )}
 
         <div className="center-block">
@@ -355,18 +384,20 @@ const VoiceAssistant = () => {
               onClick={handleMicClick}
               className={`mic-button ${isListening ? 'active' : ''}`}
               aria-label={isListening ? 'Остановить запись' : 'Начать запись'}
-              disabled={isTGWebView && !micPermissionGranted}
+              disabled={!userId || (isTGWebView && !micPermissionGranted)}
             >
               <svg className="mic-icon" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
               </svg>
             </button>
             <div className="mic-status">
-              {isTGWebView && !micPermissionGranted 
-                ? 'Разрешите микрофон в настройках' 
-                : isListening 
-                  ? 'Идет запись...' 
-                  : 'Нажмите для записи'}
+              {!userId 
+                ? "Требуется авторизация" 
+                : isTGWebView && !micPermissionGranted 
+                  ? "Разрешите микрофон в настройках" 
+                  : isListening 
+                    ? "Идет запись..." 
+                    : "Нажмите для записи"}
             </div>
           </div>
 

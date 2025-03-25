@@ -418,3 +418,18 @@ body {
 .mic-button.active {
   animation: pulse 1.5s infinite;
 }
+
+.share-button {
+  padding: 10px 15px;
+  background: #0088cc;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.share-button:hover {
+  background: #0077bb;
+}
