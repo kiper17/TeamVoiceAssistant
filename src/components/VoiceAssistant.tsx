@@ -507,15 +507,7 @@ const VoiceAssistant = () => {
                 )}
               </div>
             </div>
-
-            <div className="voice-commands-info">
-              <h4>Примеры команд:</h4>
-              <ul>
-                <li>"Команда 1 плюс 5"</li>
-                <li>"Команде 2 минус 3"</li>
-              </ul>
-            </div>
-
+            
             <div className="voice-output">
               <h4>Распознанная команда:</h4>
               <div className="output-text">
