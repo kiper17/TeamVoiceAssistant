@@ -7,31 +7,6 @@ import {
 import { db } from '../firebase';
 import './VoiceAssistant.css';
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp: {
-        initData: string;
-        initDataUnsafe: {
-          user?: {
-            id: number;
-            first_name?: string;
-            last_name?: string;
-            username?: string;
-            language_code?: string;
-          };
-        };
-        showAlert: (message: string, callback?: () => void) => void;
-        requestPermission: (
-          permission: string,
-          callback: (granted: boolean) => void
-        ) => void;
-        expand: () => void;
-      };
-    };
-  }
-}
-
 type Team = {
   id: string;
   name: string;
@@ -39,6 +14,11 @@ type Team = {
   points: number;
   expanded: boolean;
   ownerId: string;
+};
+
+type User = {
+  id: string;
+  name: string;
 };
 
 const VoiceAssistant = () => {
@@ -49,47 +29,77 @@ const VoiceAssistant = () => {
   const [teamCount, setTeamCount] = useState(2);
   const [peopleCount, setPeopleCount] = useState(4);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [isTGWebView, setIsTGWebView] = useState(false);
   const [micPermissionGranted, setMicPermissionGranted] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [username, setUsername] = useState('');
+  const [showAuthForm, setShowAuthForm] = useState(true);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Инициализация Telegram WebApp
+  // Проверка поддержки голосового API
   useEffect(() => {
-    const userAgent = navigator.userAgent.toLowerCase();
-    const isTelegram = userAgent.includes('telegram');
-    setIsTGWebView(isTelegram);
+    if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+      setIsSupported(false);
+    }
+  }, []);
 
-    if (isTelegram && window.Telegram?.WebApp) {
-      const tgWebApp = window.Telegram.WebApp;
-      tgWebApp.expand();
-
-      // Получаем ID пользователя
-      const tgUser = tgWebApp.initDataUnsafe.user;
-      if (tgUser?.id) {
-        setUserId(tgUser.id.toString());
+  // Запрос разрешения на микрофон
+  useEffect(() => {
+    const requestMicPermission = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        setMicPermissionGranted(true);
+      } catch (error) {
+        console.error('Microphone access denied:', error);
       }
+    };
+    requestMicPermission();
+  }, []);
 
-      // Запрашиваем разрешение на микрофон
-      tgWebApp.requestPermission('microphone', (granted) => {
-        setMicPermissionGranted(granted);
-        if (!granted) {
-          tgWebApp.showAlert("Для работы голосового ассистента разрешите доступ к микрофону в настройках Telegram");
-        }
-      });
-    } else {
-      setMicPermissionGranted(true);
+  // Авторизация пользователя
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (username.trim()) {
+      const user: User = {
+        id: generateUserId(),
+        name: username.trim()
+      };
+      setCurrentUser(user);
+      setShowAuthForm(false);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+    }
+  };
+
+  // Выход из системы
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setUsername('');
+    setShowAuthForm(true);
+    localStorage.removeItem('currentUser');
+  };
+
+  // Генерация ID пользователя
+  const generateUserId = () => {
+    return 'user-' + Math.random().toString(36).substr(2, 9);
+  };
+
+  // Загрузка сохраненного пользователя
+  useEffect(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+      setShowAuthForm(false);
     }
   }, []);
 
   // Подписка на команды пользователя
   useEffect(() => {
-    if (!userId) return;
+    if (!currentUser) return;
 
     const teamsQuery = query(
       collection(db, 'teams'),
-      where('ownerId', '==', userId)
+      where('ownerId', '==', currentUser.id)
     );
 
     const unsubscribe = onSnapshot(teamsQuery, (snapshot) => {
@@ -105,52 +115,40 @@ const VoiceAssistant = () => {
     });
 
     return () => unsubscribe();
-  }, [userId]);
+  }, [currentUser]);
 
   // Голосовой помощник
   useEffect(() => {
-    if (!micPermissionGranted) return;
+    if (!micPermissionGranted || !currentUser) return;
 
-    const initVoiceRecognition = () => {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        setIsSupported(false);
-        return;
-      }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ru-RU';
+    recognition.interimResults = false;
+    recognition.continuous = true;
 
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'ru-RU';
-      recognition.interimResults = false;
-      recognition.continuous = true;
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setText(transcript);
-        handleVoiceCommand(transcript);
-      };
-
-      recognition.onerror = (event) => {
-        console.error('Ошибка распознавания:', event.error);
-        if (event.error === 'no-speech' && isListening) {
-          recognition.start();
-        }
-      };
-
-      if (isListening) {
-        recognition.start();
-      }
-
-      return () => {
-        recognition.stop();
-      };
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setText(transcript);
+      handleVoiceCommand(transcript);
     };
 
-    const cleanup = initVoiceRecognition();
-    return cleanup;
-  }, [isListening, micPermissionGranted]);
+    recognition.onerror = (event) => {
+      console.error('Ошибка распознавания:', event.error);
+    };
 
+    if (isListening) {
+      recognition.start();
+    }
+
+    return () => {
+      recognition.stop();
+    };
+  }, [isListening, micPermissionGranted, currentUser]);
+
+  // Обновление очков команды
   const updateTeamPoints = async (teamId: string, delta: number) => {
-    if (!userId) return;
+    if (!currentUser) return;
 
     try {
       await updateDoc(doc(db, 'teams', teamId), {
@@ -158,16 +156,13 @@ const VoiceAssistant = () => {
       });
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
-      if (isTGWebView) {
-        window.Telegram?.WebApp.showAlert("Не удалось изменить очки");
-      } else {
-        alert("Не удалось изменить очки");
-      }
+      alert("Не удалось изменить очки");
     }
   };
 
+  // Обработка голосовых команд
   const handleVoiceCommand = async (command: string) => {
-    if (!userId) return;
+    if (!currentUser) return;
 
     const normalizedCommand = command.toLowerCase().trim();
     const match = normalizedCommand.match(
@@ -196,22 +191,15 @@ const VoiceAssistant = () => {
     }
   };
 
+  // Создание команд
   const createTeams = async () => {
-    if (!userId) {
-      if (isTGWebView) {
-        window.Telegram?.WebApp.showAlert("Требуется авторизация в Telegram");
-      } else {
-        alert("Требуется авторизация");
-      }
+    if (!currentUser) {
+      alert("Требуется авторизация");
       return;
     }
 
     if (teamCount === 0 || peopleCount === 0) {
-      if (isTGWebView) {
-        window.Telegram?.WebApp.showAlert("Количество команд и участников должно быть больше 0");
-      } else {
-        alert("Количество команд и участников должно быть больше 0");
-      }
+      alert("Количество команд и участников должно быть больше 0");
       return;
     }
     
@@ -223,7 +211,7 @@ const VoiceAssistant = () => {
     // Удаляем старые команды пользователя
     const teamsQuery = query(
       collection(db, 'teams'),
-      where('ownerId', '==', userId)
+      where('ownerId', '==', currentUser.id)
     );
     const snapshot = await getDocs(teamsQuery);
     snapshot.forEach(doc => {
@@ -241,25 +229,20 @@ const VoiceAssistant = () => {
         name: `Команда ${i + 1}`,
         members,
         points: 0,
-        ownerId: userId
+        ownerId: currentUser.id
       });
     }
     
     try {
       await batch.commit();
       setShowTeamCreator(false);
-      setTeamCount(2);
-      setPeopleCount(4);
     } catch (error) {
       console.error("Ошибка создания команд:", error);
-      if (isTGWebView) {
-        window.Telegram?.WebApp.showAlert("Ошибка при создании команд");
-      } else {
-        alert("Ошибка при создании команд");
-      }
+      alert("Ошибка при создании команд");
     }
   };
 
+  // Вспомогательные функции
   const toggleTeamExpansion = (teamId: string) => {
     setTeams(teams.map(team => 
       team.id === teamId ? {...team, expanded: !team.expanded} : team
@@ -281,8 +264,8 @@ const VoiceAssistant = () => {
   };
 
   const handleMicClick = () => {
-    if (isTGWebView && !micPermissionGranted) {
-      window.Telegram?.WebApp.showAlert("Пожалуйста, разрешите доступ к микрофону в настройках Telegram");
+    if (!micPermissionGranted) {
+      alert("Пожалуйста, разрешите доступ к микрофону");
       return;
     }
     setIsListening(!isListening);
@@ -297,21 +280,35 @@ const VoiceAssistant = () => {
     );
   }
 
-  if (!userId && isTGWebView) {
+  if (showAuthForm) {
     return (
-      <div className="auth-warning">
-        Пожалуйста, авторизуйтесь через Telegram для использования приложения
+      <div className="auth-container">
+        <form onSubmit={handleLogin} className="auth-form">
+          <h2>Вход в систему</h2>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Введите ваше имя"
+            required
+          />
+          <button type="submit">Войти</button>
+        </form>
       </div>
     );
   }
 
   return (
     <div className="voice-assistant-container">
+      <div className="user-header">
+        <span>Пользователь: {currentUser?.name}</span>
+        <button onClick={handleLogout} className="logout-button">Выйти</button>
+      </div>
+
       <button 
         className="team-creator-button"
         onClick={() => setShowTeamCreator(true)}
         aria-label="Создать команды"
-        disabled={!userId}
       >
         <svg className="team-icon" viewBox="0 0 24 24">
           <path fill="currentColor" d="M16 17V19H2V17S2 13 9 13 16 17 16 17M12.5 7.5A3.5 3.5 0 1 0 9 11A3.5 3.5 0 0 0 12.5 7.5M15.94 13A5.32 5.32 0 0 1 18 17V19H22V17S22 13.37 15.94 13M15 4A3.39 3.39 0 0 0 13.07 4.59A5 5 0 0 1 13.07 10.41A3.39 3.39 0 0 0 15 11A3.5 3.5 0 0 0 15 4Z" />
@@ -373,7 +370,7 @@ const VoiceAssistant = () => {
           </div>
         ) : (
           <div className="no-teams-message">
-            {userId ? "Создайте свои первые команды" : "Авторизуйтесь для создания команд"}
+            Создайте свои первые команды
           </div>
         )}
 
@@ -384,20 +381,18 @@ const VoiceAssistant = () => {
               onClick={handleMicClick}
               className={`mic-button ${isListening ? 'active' : ''}`}
               aria-label={isListening ? 'Остановить запись' : 'Начать запись'}
-              disabled={!userId || (isTGWebView && !micPermissionGranted)}
+              disabled={!micPermissionGranted}
             >
               <svg className="mic-icon" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
               </svg>
             </button>
             <div className="mic-status">
-              {!userId 
-                ? "Требуется авторизация" 
-                : isTGWebView && !micPermissionGranted 
-                  ? "Разрешите микрофон в настройках" 
-                  : isListening 
-                    ? "Идет запись..." 
-                    : "Нажмите для записи"}
+              {!micPermissionGranted 
+                ? "Разрешите доступ к микрофону" 
+                : isListening 
+                  ? "Идет запись..." 
+                  : "Нажмите для записи"}
             </div>
           </div>
 
@@ -419,7 +414,7 @@ const VoiceAssistant = () => {
               <label>Количество команд:</label>
               <div className="number-input">
                 <button 
-                  onClick={() => setTeamCount(Math.max(0, teamCount - 1))}
+                  onClick={() => setTeamCount(Math.max(1, teamCount - 1))}
                   className="number-control minus"
                 >
                   −
@@ -428,7 +423,7 @@ const VoiceAssistant = () => {
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  value={teamCount === 0 ? '' : teamCount}
+                  value={teamCount}
                   onChange={handleTeamCountChange}
                   className="number-input-field"
                 />
@@ -445,7 +440,7 @@ const VoiceAssistant = () => {
               <label>Количество участников:</label>
               <div className="number-input">
                 <button 
-                  onClick={() => setPeopleCount(Math.max(0, peopleCount - 1))}
+                  onClick={() => setPeopleCount(Math.max(1, peopleCount - 1))}
                   className="number-control minus"
                 >
                   −
@@ -454,7 +449,7 @@ const VoiceAssistant = () => {
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  value={peopleCount === 0 ? '' : peopleCount}
+                  value={peopleCount}
                   onChange={handlePeopleCountChange}
                   className="number-input-field"
                 />
@@ -470,11 +465,7 @@ const VoiceAssistant = () => {
             <div className="modal-buttons">
               <button onClick={createTeams} className="create-button">Создать</button>
               <button 
-                onClick={() => {
-                  setShowTeamCreator(false);
-                  setTeamCount(2);
-                  setPeopleCount(4);
-                }} 
+                onClick={() => setShowTeamCreator(false)} 
                 className="cancel-button"
               >
                 Отмена
