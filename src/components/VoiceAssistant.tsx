@@ -19,6 +19,7 @@ declare global {
             last_name?: string;
             username?: string;
             language_code?: string;
+            photo_url?: string;
           };
         };
         showAlert: (message: string, callback?: () => void) => void;
@@ -27,6 +28,9 @@ declare global {
           callback: (granted: boolean) => void
         ) => void;
         expand: () => void;
+        openTelegramLink: (url: string) => void;
+        onEvent: (event: string, callback: () => void) => void;
+        offEvent: (event: string, callback: () => void) => void;
       };
     };
   }
@@ -41,6 +45,46 @@ type Team = {
   ownerId: string;
 };
 
+type UserData = {
+  name: string;
+  username?: string;
+  photoUrl?: string;
+};
+
+const AuthWarning = ({ isTGWebView }: { isTGWebView: boolean }) => {
+  const handleAuthClick = () => {
+    if (isTGWebView) {
+      window.Telegram?.WebApp.openTelegramLink('https://t.me/TeamsWebApp_bot?start=webapp_auth');
+    } else {
+      alert('Пожалуйста, откройте приложение через Telegram бота');
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-content">
+        <h2>Требуется авторизация</h2>
+        {isTGWebView ? (
+          <>
+            <p>Для использования приложения необходимо войти через Telegram</p>
+            <button onClick={handleAuthClick} className="auth-button">
+              Войти через Telegram
+            </button>
+          </>
+        ) : (
+          <>
+            <p>Это приложение работает только внутри Telegram WebApp</p>
+            <p>Откройте его через Telegram бота</p>
+            <button onClick={handleAuthClick} className="auth-button">
+              Открыть бота
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const VoiceAssistant = () => {
   const [isListening, setIsListening] = useState(false);
   const [text, setText] = useState('');
@@ -52,6 +96,7 @@ const VoiceAssistant = () => {
   const [isTGWebView, setIsTGWebView] = useState(false);
   const [micPermissionGranted, setMicPermissionGranted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -65,10 +110,15 @@ const VoiceAssistant = () => {
       const tgWebApp = window.Telegram.WebApp;
       tgWebApp.expand();
 
-      // Получаем ID пользователя
+      // Получаем данные пользователя
       const tgUser = tgWebApp.initDataUnsafe.user;
       if (tgUser?.id) {
         setUserId(tgUser.id.toString());
+        setUserData({
+          name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' '),
+          username: tgUser.username,
+          photoUrl: tgUser.photo_url
+        });
       }
 
       // Запрашиваем разрешение на микрофон
@@ -78,6 +128,23 @@ const VoiceAssistant = () => {
           tgWebApp.showAlert("Для работы голосового ассистента разрешите доступ к микрофону в настройках Telegram");
         }
       });
+
+      // Обработчики событий Telegram WebApp
+      const handleThemeChange = () => {
+        // Можно добавить обработку смены темы
+      };
+
+      const handleViewportChange = () => {
+        // Обработка изменения размера окна
+      };
+
+      tgWebApp.onEvent('themeChanged', handleThemeChange);
+      tgWebApp.onEvent('viewportChanged', handleViewportChange);
+
+      return () => {
+        tgWebApp.offEvent('themeChanged', handleThemeChange);
+        tgWebApp.offEvent('viewportChanged', handleViewportChange);
+      };
     } else {
       setMicPermissionGranted(true);
     }
@@ -288,6 +355,15 @@ const VoiceAssistant = () => {
     setIsListening(!isListening);
   };
 
+  const handleLogout = () => {
+    if (isTGWebView) {
+      window.Telegram?.WebApp.showAlert('Для выхода закройте веб-приложение');
+    } else {
+      setUserId(null);
+      setUserData(null);
+    }
+  };
+
   if (!isSupported) {
     return (
       <div className="browser-warning">
@@ -298,15 +374,32 @@ const VoiceAssistant = () => {
   }
 
   if (!userId && isTGWebView) {
-    return (
-      <div className="auth-warning">
-        Пожалуйста, авторизуйтесь через Telegram для использования приложения
-      </div>
-    );
+    return <AuthWarning isTGWebView={true} />;
+  }
+
+  if (!isTGWebView) {
+    return <AuthWarning isTGWebView={false} />;
   }
 
   return (
     <div className="voice-assistant-container">
+      <div className="user-header">
+        {userData?.photoUrl && (
+          <img src={userData.photoUrl} alt="User" className="user-avatar" />
+        )}
+        <div className="user-info">
+          <span className="user-name">{userData?.name}</span>
+          {userData?.username && (
+            <span className="user-username">@{userData.username}</span>
+          )}
+        </div>
+        <button onClick={handleLogout} className="logout-button">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor" d="M16 17v-3H5v-4h11V7l5 5-5 5M14 2a2 2 0 0 1 2 2v2h-2V4H5v16h9v-2h2v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9z"/>
+          </svg>
+        </button>
+      </div>
+
       <button 
         className="team-creator-button"
         onClick={() => setShowTeamCreator(true)}
@@ -373,7 +466,7 @@ const VoiceAssistant = () => {
           </div>
         ) : (
           <div className="no-teams-message">
-            {userId ? "Создайте свои первые команды" : "Авторизуйтесь для создания команд"}
+            Создайте свои первые команды
           </div>
         )}
 
@@ -391,13 +484,11 @@ const VoiceAssistant = () => {
               </svg>
             </button>
             <div className="mic-status">
-              {!userId 
-                ? "Требуется авторизация" 
-                : isTGWebView && !micPermissionGranted 
-                  ? "Разрешите микрофон в настройках" 
-                  : isListening 
-                    ? "Идет запись..." 
-                    : "Нажмите для записи"}
+              {isTGWebView && !micPermissionGranted 
+                ? "Разрешите микрофон в настройках" 
+                : isListening 
+                  ? "Идет запись..." 
+                  : "Нажмите для записи"}
             </div>
           </div>
 

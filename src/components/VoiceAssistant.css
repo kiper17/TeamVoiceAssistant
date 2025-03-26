@@ -433,3 +433,46 @@ body {
 .share-button:hover {
   background: #0077bb;
 }
+
+/* Стили для авторизации */
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+}
+
+.auth-content {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.auth-content h2 {
+  margin-top: 0;
+  color: #333;
+}
+
+.auth-content p {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.auth-button {
+  padding: 12px 24px;
+  background: #0088cc;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.auth-button:hover {
+  background: #0077bb;
+}
