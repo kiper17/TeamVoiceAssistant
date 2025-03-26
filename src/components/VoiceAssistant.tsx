@@ -15,6 +15,7 @@ type Team = {
   points: number;
   expanded: boolean;
   ownerId: string;
+  createdAt?: string;
 };
 
 type User = {
@@ -36,6 +37,8 @@ const VoiceAssistant = () => {
   const [username, setUsername] = useState('');
   const [showAuthForm, setShowAuthForm] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -145,7 +148,8 @@ const VoiceAssistant = () => {
         members: doc.data().members,
         points: doc.data().points,
         expanded: false,
-        ownerId: doc.data().ownerId
+        ownerId: doc.data().ownerId,
+        createdAt: doc.data().createdAt
       }));
       setTeams(loadedTeams);
     });
@@ -179,7 +183,8 @@ const VoiceAssistant = () => {
       });
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
-      alert("Не удалось изменить очки");
+      setErrorMessage("Не удалось изменить очки");
+      setTimeout(() => setErrorMessage(''), 3000);
     } finally {
       setIsProcessing(false);
     }
@@ -216,37 +221,46 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, teams, updateTeamPoints]);
 
-  // Создание команд
+  // Создание команд (исправленная версия)
   const createTeams = useCallback(async () => {
-    if (!currentUser || isProcessing) {
-      alert("Требуется авторизация");
+    if (!currentUser) {
+      setErrorMessage("Требуется авторизация");
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
 
     if (teamCount < 1 || peopleCount < 1) {
-      alert("Количество команд и участников должно быть больше 0");
+      setErrorMessage("Количество команд и участников должно быть больше 0");
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
 
     setIsProcessing(true);
+    setText("Создание команд...");
+    
     try {
       const batch = writeBatch(db);
 
-      // Удаляем старые команды пользователя
+      // 1. Удаление старых команд
       const teamsQuery = query(
         collection(db, 'teams'),
         where('ownerId', '==', currentUser.id)
       );
       const snapshot = await getDocs(teamsQuery);
-      snapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
+      
+      // Проверяем, есть ли что удалять
+      if (!snapshot.empty) {
+        snapshot.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit(); // Фиксируем удаление
+      }
 
-      // Генерируем участников и распределяем по командам
+      // 2. Создание новых команд
+      const newBatch = writeBatch(db); // Новая пачка для создания
       const people = Array.from({ length: peopleCount }, (_, i) => i + 1);
       const shuffled = [...people].sort(() => 0.5 - Math.random());
 
-      // Создаем новые команды
       for (let i = 0; i < teamCount; i++) {
         const members = shuffled.slice(
           Math.floor(i * shuffled.length / teamCount),
@@ -254,23 +268,40 @@ const VoiceAssistant = () => {
         );
 
         const newTeamRef = doc(collection(db, 'teams'));
-        batch.set(newTeamRef, {
+        newBatch.set(newTeamRef, {
           name: `Команда ${i + 1}`,
           members,
           points: 0,
-          ownerId: currentUser.id
+          ownerId: currentUser.id,
+          createdAt: new Date().toISOString()
         });
       }
 
-      await batch.commit();
+      await newBatch.commit();
+      
+      setSuccessMessage(`Успешно создано ${teamCount} команд с ${peopleCount} участниками`);
+      setTimeout(() => setSuccessMessage(''), 3000);
       setShowTeamCreator(false);
+      setText("Команды успешно созданы!");
     } catch (error) {
       console.error("Ошибка создания команд:", error);
-      alert("Ошибка при создании команд");
+      
+      let errorMsg = "Ошибка при создании команд";
+      if (error instanceof Error) {
+        errorMsg = error.message.includes('Missing or insufficient permissions') 
+          ? "Ошибка: Нет прав доступа. Проверьте правила Firestore"
+          : error.message.includes('network-error') 
+            ? "Ошибка сети. Проверьте подключение"
+            : error.message;
+      }
+      
+      setErrorMessage(errorMsg);
+      setTimeout(() => setErrorMessage(''), 3000);
+      setText(errorMsg);
     } finally {
       setIsProcessing(false);
     }
-  }, [currentUser, teamCount, peopleCount, isProcessing]);
+  }, [currentUser, teamCount, peopleCount]);
 
   // Переключение отображения участников команды
   const toggleTeamExpansion = useCallback((teamId: string) => {
@@ -284,7 +315,8 @@ const VoiceAssistant = () => {
   // Обработчик клика по микрофону
   const handleMicClick = useCallback(() => {
     if (!micPermissionGranted) {
-      alert("Пожалуйста, разрешите доступ к микрофону в настройках браузера");
+      setErrorMessage("Пожалуйста, разрешите доступ к микрофону в настройках браузера");
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
     setIsListening(prev => !prev);
@@ -323,7 +355,7 @@ const VoiceAssistant = () => {
             required
             autoFocus
           />
-          <button type="submit" disabled={!username.trim()}>
+          <button type="submit" disabled={!username.trim() || isProcessing}>
             {isProcessing ? 'Загрузка...' : 'Войти'}
           </button>
         </form>
@@ -333,10 +365,26 @@ const VoiceAssistant = () => {
 
   return (
     <div className="voice-assistant-container">
+      {/* Сообщения об успехе и ошибках */}
+      {successMessage && (
+        <div className="message success">
+          {successMessage}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="message error">
+          {errorMessage}
+        </div>
+      )}
+
       <header className="app-header">
         <div className="user-info">
           <span>Пользователь: {currentUser?.name}</span>
-          <button onClick={handleLogout} className="logout-button">
+          <button 
+            onClick={handleLogout} 
+            className="logout-button"
+            disabled={isProcessing}
+          >
             Выйти
           </button>
         </div>
@@ -425,6 +473,7 @@ const VoiceAssistant = () => {
               <button 
                 onClick={() => setShowTeamCreator(true)}
                 className="primary-button"
+                disabled={isProcessing}
               >
                 Создать команды
               </button>
@@ -485,6 +534,7 @@ const VoiceAssistant = () => {
               <button 
                 onClick={() => setShowTeamCreator(false)}
                 className="close-button"
+                disabled={isProcessing}
               >
                 &times;
               </button>
@@ -496,7 +546,7 @@ const VoiceAssistant = () => {
                 <div className="number-input-group">
                   <button 
                     onClick={() => handleTeamCountChange(teamCount - 1)}
-                    disabled={teamCount <= 1}
+                    disabled={teamCount <= 1 || isProcessing}
                   >
                     -
                   </button>
@@ -506,10 +556,11 @@ const VoiceAssistant = () => {
                     max="10"
                     value={teamCount}
                     onChange={(e) => handleTeamCountChange(parseInt(e.target.value) || 1)}
+                    disabled={isProcessing}
                   />
                   <button 
                     onClick={() => handleTeamCountChange(teamCount + 1)}
-                    disabled={teamCount >= 10}
+                    disabled={teamCount >= 10 || isProcessing}
                   >
                     +
                   </button>
@@ -521,7 +572,7 @@ const VoiceAssistant = () => {
                 <div className="number-input-group">
                   <button 
                     onClick={() => handlePeopleCountChange(peopleCount - 1)}
-                    disabled={peopleCount <= 1}
+                    disabled={peopleCount <= 1 || isProcessing}
                   >
                     -
                   </button>
@@ -531,10 +582,11 @@ const VoiceAssistant = () => {
                     max="100"
                     value={peopleCount}
                     onChange={(e) => handlePeopleCountChange(parseInt(e.target.value) || 1)}
+                    disabled={isProcessing}
                   />
                   <button 
                     onClick={() => handlePeopleCountChange(peopleCount + 1)}
-                    disabled={peopleCount >= 100}
+                    disabled={peopleCount >= 100 || isProcessing}
                   >
                     +
                   </button>
@@ -553,6 +605,7 @@ const VoiceAssistant = () => {
               <button 
                 onClick={() => setShowTeamCreator(false)}
                 className="secondary-button"
+                disabled={isProcessing}
               >
                 Отмена
               </button>
