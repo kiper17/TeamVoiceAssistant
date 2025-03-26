@@ -1,11 +1,43 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  collection, addDoc, doc, updateDoc, 
-  getDocs, deleteDoc, onSnapshot, 
-  increment, writeBatch, query, where
+  collection, 
+  doc, 
+  updateDoc, 
+  getDocs, 
+  writeBatch, 
+  query, 
+  where, 
+  onSnapshot, 
+  increment 
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import './VoiceAssistant.css';
+
+enum AuthStatus {
+  Idle = 'idle',
+  Pending = 'pending',
+  Success = 'success',
+  Failed = 'failed'
+}
+
+const isPendingStatus = (status: AuthStatus): status is AuthStatus.Pending => {
+  return status === AuthStatus.Pending;
+};
+
+type Team = {
+  id: string;
+  name: string;
+  members: number[];
+  points: number;
+  expanded: boolean;
+  ownerId: string;
+};
+
+type UserData = {
+  name: string;
+  username?: string;
+  photoUrl?: string;
+};
 
 declare global {
   interface Window {
@@ -23,10 +55,7 @@ declare global {
           };
         };
         showAlert: (message: string, callback?: () => void) => void;
-        requestPermission: (
-          permission: string,
-          callback: (granted: boolean) => void
-        ) => void;
+        requestPermission: (permission: string, callback: (granted: boolean) => void) => void;
         expand: () => void;
         openTelegramLink: (url: string) => void;
         close: () => void;
@@ -39,92 +68,144 @@ declare global {
           onClick: (callback: () => void) => void;
           offClick: (callback: () => void) => void;
         };
+        BackButton: {
+          show: () => void;
+          hide: () => void;
+          onClick: (callback: () => void) => void;
+          offClick: (callback: () => void) => void;
+        };
+        enableClosingConfirmation: () => void;
+        disableClosingConfirmation: () => void;
         colorScheme: 'light' | 'dark';
+        isExpanded: boolean;
+        platform: string;
       };
     };
   }
 }
 
-type Team = {
-  id: string;
-  name: string;
-  members: number[];
-  points: number;
-  expanded: boolean;
-  ownerId: string;
-};
+const AuthWarning: React.FC<{ 
+  isTGWebView: boolean;
+  onAuthSuccess: (user: { id: string; first_name?: string; last_name?: string; username?: string }) => void;
+}> = ({ isTGWebView, onAuthSuccess }) => {
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(AuthStatus.Idle);
 
-type UserData = {
-  name: string;
-  username?: string;
-  photoUrl?: string;
-};
-
-const AuthWarning = ({ isTGWebView }: { isTGWebView: boolean }) => {
-  const handleAuthClick = () => {
-    if (isTGWebView && window.Telegram?.WebApp) {
-      const botUsername = 'TeamsWebApp_bot';
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=webapp_auth`);
-    } else {
-      window.open('https://t.me/TeamsWebApp_bot/webapp', '_blank');
-    }
-  };
+  const handleAuthClick = useCallback(() => {
+    if (!isTGWebView || !window.Telegram?.WebApp) return;
+    
+    setAuthStatus(AuthStatus.Pending);
+    const authToken = `webapp_${Date.now()}`;
+    localStorage.setItem('tg_auth_token', authToken);
+    
+    window.Telegram.WebApp.openTelegramLink(
+      `https://t.me/TeamsWebApp_bot?start=${authToken}`
+    );
+  }, [isTGWebView]);
 
   useEffect(() => {
-    if (isTGWebView && window.Telegram?.WebApp) {
-      const { MainButton } = window.Telegram.WebApp;
-      MainButton.setText("Авторизоваться");
-      MainButton.show();
-      MainButton.onClick(handleAuthClick);
-      
-      return () => {
-        MainButton.offClick(handleAuthClick);
-        MainButton.hide();
-      };
-    }
-  }, [isTGWebView]);
+    if (!isTGWebView || !isPendingStatus(authStatus)) return;
+
+    const checkAuth = setInterval(() => {
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe.user;
+      if (tgUser?.id) {
+        clearInterval(checkAuth);
+        onAuthSuccess({
+          id: tgUser.id.toString(),
+          first_name: tgUser.first_name,
+          last_name: tgUser.last_name,
+          username: tgUser.username
+        });
+        setAuthStatus(AuthStatus.Success);
+        localStorage.removeItem('tg_auth_token');
+      }
+    }, 1000);
+
+    return () => clearInterval(checkAuth);
+  }, [authStatus, isTGWebView, onAuthSuccess]);
 
   return (
     <div className="auth-container">
       <div className="auth-content">
         <h2>Требуется авторизация</h2>
-        {isTGWebView ? (
+        
+        {isPendingStatus(authStatus) ? (
           <>
-            <p>Для использования приложения необходимо войти через Telegram</p>
-            <button onClick={handleAuthClick} className="auth-button tgph-button">
-              Войти через Telegram
+            <div className="auth-loader"></div>
+            <p>Пожалуйста, завершите авторизацию в Telegram</p>
+            <p>После авторизации нажмите кнопку ниже</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="auth-button"
+            >
+              Я авторизовался
             </button>
           </>
         ) : (
           <>
-            <p>Это приложение работает только внутри Telegram WebApp</p>
-            <p>Откройте его через Telegram бота</p>
-            <button onClick={handleAuthClick} className="auth-button">
-              Открыть бота
+            <p>Для использования приложения необходимо войти через Telegram</p>
+            <button 
+              onClick={handleAuthClick} 
+              className="auth-button tgph-button"
+              disabled={isPendingStatus(authStatus)}
+            >
+              Войти через Telegram
             </button>
           </>
+        )}
+
+        {authStatus === AuthStatus.Failed && (
+          <p className="auth-error">Ошибка авторизации. Пожалуйста, попробуйте снова.</p>
         )}
       </div>
     </div>
   );
 };
 
-const VoiceAssistant = () => {
-  const [isListening, setIsListening] = useState(false);
-  const [text, setText] = useState('');
-  const [isSupported, setIsSupported] = useState(true);
-  const [showTeamCreator, setShowTeamCreator] = useState(false);
-  const [teamCount, setTeamCount] = useState(2);
-  const [peopleCount, setPeopleCount] = useState(4);
+const VoiceAssistant: React.FC = () => {
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [text, setText] = useState<string>('');
+  const [isSupported, setIsSupported] = useState<boolean>(true);
+  const [showTeamCreator, setShowTeamCreator] = useState<boolean>(false);
+  const [teamCount, setTeamCount] = useState<number>(2);
+  const [peopleCount, setPeopleCount] = useState<number>(4);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [isTGWebView, setIsTGWebView] = useState(false);
-  const [micPermissionGranted, setMicPermissionGranted] = useState(false);
+  const [isTGWebView, setIsTGWebView] = useState<boolean>(false);
+  const [micPermissionGranted, setMicPermissionGranted] = useState<boolean>(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [initialAuthCheck, setInitialAuthCheck] = useState<boolean>(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Инициализация Telegram WebApp
+  const handleAuthSuccess = useCallback((tgUser: { 
+    id: string; 
+    first_name?: string; 
+    last_name?: string; 
+    username?: string 
+  }) => {
+    setUserId(tgUser.id);
+    setUserData({
+      name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' '),
+      username: tgUser.username
+    });
+    
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.disableClosingConfirmation();
+    }
+  }, []);
+
+  const handleBackButtonClick = useCallback(() => {
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.close();
+    }
+  }, []);
+
+  const handleThemeChange = useCallback(() => {
+    if (window.Telegram?.WebApp) {
+      document.body.classList.toggle('telegram-dark', window.Telegram.WebApp.colorScheme === 'dark');
+    }
+  }, []);
+
   useEffect(() => {
     const userAgent = navigator.userAgent.toLowerCase();
     const isTelegram = userAgent.includes('telegram');
@@ -132,17 +213,23 @@ const VoiceAssistant = () => {
 
     if (isTelegram && window.Telegram?.WebApp) {
       const tgWebApp = window.Telegram.WebApp;
+      
       tgWebApp.expand();
+      tgWebApp.enableClosingConfirmation();
 
       const tgUser = tgWebApp.initDataUnsafe.user;
       if (tgUser?.id) {
-        setUserId(tgUser.id.toString());
-        setUserData({
-          name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' '),
-          username: tgUser.username,
-          photoUrl: tgUser.photo_url
+        handleAuthSuccess({
+          id: tgUser.id.toString(),
+          first_name: tgUser.first_name,
+          last_name: tgUser.last_name,
+          username: tgUser.username
         });
       }
+      setInitialAuthCheck(true);
+
+      tgWebApp.BackButton.show();
+      tgWebApp.BackButton.onClick(handleBackButtonClick);
 
       tgWebApp.requestPermission('microphone', (granted) => {
         setMicPermissionGranted(granted);
@@ -151,22 +238,19 @@ const VoiceAssistant = () => {
         }
       });
 
-      const handleThemeChange = () => {
-        document.body.classList.toggle('telegram-dark', tgWebApp.colorScheme === 'dark');
-      };
-
       tgWebApp.onEvent('themeChanged', handleThemeChange);
       handleThemeChange();
 
       return () => {
         tgWebApp.offEvent('themeChanged', handleThemeChange);
+        tgWebApp.BackButton.offClick(handleBackButtonClick);
       };
     } else {
       setMicPermissionGranted(true);
+      setInitialAuthCheck(true);
     }
-  }, []);
+  }, [handleAuthSuccess, handleBackButtonClick, handleThemeChange]);
 
-  // Подписка на команды пользователя
   useEffect(() => {
     if (!userId) return;
 
@@ -190,7 +274,6 @@ const VoiceAssistant = () => {
     return () => unsubscribe();
   }, [userId]);
 
-  // Голосовой помощник
   useEffect(() => {
     if (!micPermissionGranted) return;
 
@@ -232,7 +315,7 @@ const VoiceAssistant = () => {
     return cleanup;
   }, [isListening, micPermissionGranted]);
 
-  const updateTeamPoints = async (teamId: string, delta: number) => {
+  const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
     if (!userId) return;
 
     try {
@@ -247,9 +330,9 @@ const VoiceAssistant = () => {
         alert("Не удалось изменить очки");
       }
     }
-  };
+  }, [userId, isTGWebView]);
 
-  const handleVoiceCommand = async (command: string) => {
+  const handleVoiceCommand = useCallback(async (command: string) => {
     if (!userId) return;
 
     const normalizedCommand = command.toLowerCase().trim();
@@ -277,9 +360,9 @@ const VoiceAssistant = () => {
     } else {
       setText(`Не распознано: ${command}`);
     }
-  };
+  }, [teams, updateTeamPoints, userId]);
 
-  const createTeams = async () => {
+  const createTeams = useCallback(async () => {
     if (!userId) {
       if (isTGWebView) {
         window.Telegram?.WebApp.showAlert("Требуется авторизация в Telegram");
@@ -318,7 +401,8 @@ const VoiceAssistant = () => {
         Math.floor((i + 1) * shuffled.length / teamCount)
       );
       
-      batch.set(doc(collection(db, 'teams')), {
+      const teamRef = doc(collection(db, 'teams'));
+      batch.set(teamRef, {
         name: `Команда ${i + 1}`,
         members,
         points: 0,
@@ -339,44 +423,46 @@ const VoiceAssistant = () => {
         alert("Ошибка при создании команд");
       }
     }
-  };
+  }, [userId, teamCount, peopleCount, isTGWebView]);
 
-  const toggleTeamExpansion = (teamId: string) => {
-    setTeams(teams.map(team => 
-      team.id === teamId ? {...team, expanded: !team.expanded} : team
-    ));
-  };
+  const toggleTeamExpansion = useCallback((teamId: string) => {
+    setTeams(prevTeams => 
+      prevTeams.map(team => 
+        team.id === teamId ? {...team, expanded: !team.expanded} : team
+      )
+    );
+  }, []);
 
-  const handleTeamCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTeamCountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === '' || /^\d+$/.test(value)) {
       setTeamCount(value === '' ? 0 : parseInt(value));
     }
-  };
+  }, []);
 
-  const handlePeopleCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePeopleCountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === '' || /^\d+$/.test(value)) {
       setPeopleCount(value === '' ? 0 : parseInt(value));
     }
-  };
+  }, []);
 
-  const handleMicClick = () => {
+  const handleMicClick = useCallback(() => {
     if (isTGWebView && !micPermissionGranted) {
       window.Telegram?.WebApp.showAlert("Пожалуйста, разрешите доступ к микрофону в настройках Telegram");
       return;
     }
-    setIsListening(!isListening);
-  };
+    setIsListening(prev => !prev);
+  }, [isTGWebView, micPermissionGranted]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     if (isTGWebView && window.Telegram?.WebApp) {
       window.Telegram.WebApp.close();
     } else {
       setUserId(null);
       setUserData(null);
     }
-  };
+  }, [isTGWebView]);
 
   if (!isSupported) {
     return (
@@ -387,12 +473,29 @@ const VoiceAssistant = () => {
     );
   }
 
+  if (!initialAuthCheck) {
+    return <div className="auth-checking">Загрузка...</div>;
+  }
+
   if (!userId && isTGWebView) {
-    return <AuthWarning isTGWebView={true} />;
+    return <AuthWarning isTGWebView={true} onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (!isTGWebView) {
-    return <AuthWarning isTGWebView={false} />;
+    return (
+      <div className="auth-container">
+        <div className="auth-content">
+          <h2>Это приложение работает только в Telegram</h2>
+          <p>Пожалуйста, откройте его через Telegram бота</p>
+          <button 
+            onClick={() => window.open('https://t.me/TeamsWebApp_bot/webapp', '_blank')}
+            className="auth-button"
+          >
+            Открыть приложение
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
