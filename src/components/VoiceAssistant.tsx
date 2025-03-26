@@ -29,8 +29,17 @@ declare global {
         ) => void;
         expand: () => void;
         openTelegramLink: (url: string) => void;
-        onEvent: (event: string, callback: () => void) => void;
-        offEvent: (event: string, callback: () => void) => void;
+        close: () => void;
+        onEvent: (event: string, handler: () => void) => void;
+        offEvent: (event: string, handler: () => void) => void;
+        MainButton: {
+          show: () => void;
+          hide: () => void;
+          setText: (text: string) => void;
+          onClick: (callback: () => void) => void;
+          offClick: (callback: () => void) => void;
+        };
+        colorScheme: 'light' | 'dark';
       };
     };
   }
@@ -53,12 +62,27 @@ type UserData = {
 
 const AuthWarning = ({ isTGWebView }: { isTGWebView: boolean }) => {
   const handleAuthClick = () => {
-    if (isTGWebView) {
-      window.Telegram?.WebApp.openTelegramLink('https://t.me/TeamsWebApp_bot?start=webapp_auth');
+    if (isTGWebView && window.Telegram?.WebApp) {
+      const botUsername = 'TeamsWebApp_bot';
+      window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=webapp_auth`);
     } else {
-      alert('Пожалуйста, откройте приложение через Telegram бота');
+      window.open('https://t.me/TeamsWebApp_bot/webapp', '_blank');
     }
   };
+
+  useEffect(() => {
+    if (isTGWebView && window.Telegram?.WebApp) {
+      const { MainButton } = window.Telegram.WebApp;
+      MainButton.setText("Авторизоваться");
+      MainButton.show();
+      MainButton.onClick(handleAuthClick);
+      
+      return () => {
+        MainButton.offClick(handleAuthClick);
+        MainButton.hide();
+      };
+    }
+  }, [isTGWebView]);
 
   return (
     <div className="auth-container">
@@ -67,7 +91,7 @@ const AuthWarning = ({ isTGWebView }: { isTGWebView: boolean }) => {
         {isTGWebView ? (
           <>
             <p>Для использования приложения необходимо войти через Telegram</p>
-            <button onClick={handleAuthClick} className="auth-button">
+            <button onClick={handleAuthClick} className="auth-button tgph-button">
               Войти через Telegram
             </button>
           </>
@@ -110,7 +134,6 @@ const VoiceAssistant = () => {
       const tgWebApp = window.Telegram.WebApp;
       tgWebApp.expand();
 
-      // Получаем данные пользователя
       const tgUser = tgWebApp.initDataUnsafe.user;
       if (tgUser?.id) {
         setUserId(tgUser.id.toString());
@@ -121,29 +144,22 @@ const VoiceAssistant = () => {
         });
       }
 
-      // Запрашиваем разрешение на микрофон
       tgWebApp.requestPermission('microphone', (granted) => {
         setMicPermissionGranted(granted);
         if (!granted) {
-          tgWebApp.showAlert("Для работы голосового ассистента разрешите доступ к микрофону в настройках Telegram");
+          tgWebApp.showAlert("Для работы голосового ассистента разрешите доступ к микрофону");
         }
       });
 
-      // Обработчики событий Telegram WebApp
       const handleThemeChange = () => {
-        // Можно добавить обработку смены темы
-      };
-
-      const handleViewportChange = () => {
-        // Обработка изменения размера окна
+        document.body.classList.toggle('telegram-dark', tgWebApp.colorScheme === 'dark');
       };
 
       tgWebApp.onEvent('themeChanged', handleThemeChange);
-      tgWebApp.onEvent('viewportChanged', handleViewportChange);
+      handleThemeChange();
 
       return () => {
         tgWebApp.offEvent('themeChanged', handleThemeChange);
-        tgWebApp.offEvent('viewportChanged', handleViewportChange);
       };
     } else {
       setMicPermissionGranted(true);
@@ -287,7 +303,6 @@ const VoiceAssistant = () => {
     
     const batch = writeBatch(db);
     
-    // Удаляем старые команды пользователя
     const teamsQuery = query(
       collection(db, 'teams'),
       where('ownerId', '==', userId)
@@ -297,7 +312,6 @@ const VoiceAssistant = () => {
       batch.delete(doc.ref);
     });
     
-    // Создаем новые команды
     for (let i = 0; i < teamCount; i++) {
       const members = shuffled.slice(
         Math.floor(i * shuffled.length / teamCount),
@@ -356,8 +370,8 @@ const VoiceAssistant = () => {
   };
 
   const handleLogout = () => {
-    if (isTGWebView) {
-      window.Telegram?.WebApp.showAlert('Для выхода закройте веб-приложение');
+    if (isTGWebView && window.Telegram?.WebApp) {
+      window.Telegram.WebApp.close();
     } else {
       setUserId(null);
       setUserData(null);
@@ -407,7 +421,7 @@ const VoiceAssistant = () => {
         disabled={!userId}
       >
         <svg className="team-icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M16 17V19H2V17S2 13 9 13 16 17 16 17M12.5 7.5A3.5 3.5 0 1 0 9 11A3.5 3.5 0 0 0 12.5 7.5M15.94 13A5.32 5.32 0 0 1 18 17V19H22V17S22 13.37 15.94 13M15 4A3.39 3.39 0 0 0 13.07 4.59A5 5 0 0 1 13.07 10.41A3.39 3.39 0 0 0 15 11A3.5 3.5 0 0 0 15 4Z" />
+          <path fill="currentColor" d="M16 17V19H2V17S2 13 9 13 16 17 16 17M12.5 7.5A3.5 3.5 0 1 0 9 11A3.5 3.5 0 0 0 12.5 7.5M15.94 13A5.32 5.32 0 0 1 18 17V19H22V17S22 13.37 15.94 13M15 4A3.39 3.39 0 0 0 13.07 4.59A5 5 0 0 1 13.07 10.41A3.39 3.39 0 0 0 15 11A3.5 3.5 0 0 0 15 4Z"/>
         </svg>
       </button>
 
@@ -480,7 +494,7 @@ const VoiceAssistant = () => {
               disabled={!userId || (isTGWebView && !micPermissionGranted)}
             >
               <svg className="mic-icon" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
+                <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
               </svg>
             </button>
             <div className="mic-status">

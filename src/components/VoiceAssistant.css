@@ -476,3 +476,33 @@ body {
 .auth-button:hover {
   background: #0077bb;
 }
+
+/* Добавьте в CSS */
+.tgph-button {
+  background: #0088cc;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.tgph-button:hover {
+  opacity: 0.9;
+}
+
+.telegram-alert {
+  display: none !important; /* Скрываем стандартное окно */
+}
+
+.telegram-dark {
+  background-color: #212121;
+  color: #ffffff;
+}
+
+.telegram-dark .auth-content {
+  background-color: #2e2e2e;
+  color: #ffffff;
+}
