@@ -17,6 +17,7 @@ type Team = {
   expanded: boolean;
   ownerId: string;
   createdAt?: string;
+  lastAccessed?: string;
 };
 
 type User = {
@@ -56,9 +57,13 @@ const VoiceAssistant = () => {
     recognitionRef.current.lang = 'ru-RU';
     recognitionRef.current.interimResults = false;
     recognitionRef.current.continuous = true;
+    recognitionRef.current.maxAlternatives = 3;
 
     recognitionRef.current.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
+      const results = event.results;
+      const last = results[results.length - 1];
+      const transcript = last[0].transcript.trim();
+      
       setText(transcript);
       handleVoiceCommand(transcript);
     };
@@ -68,6 +73,13 @@ const VoiceAssistant = () => {
       if (event.error === 'not-allowed') {
         setMicPermissionGranted(false);
       }
+      setIsListening(false);
+    };
+
+    recognitionRef.current.onend = () => {
+      if (isListening) {
+        recognitionRef.current?.start();
+      }
     };
 
     return () => {
@@ -75,7 +87,7 @@ const VoiceAssistant = () => {
         recognitionRef.current.stop();
       }
     };
-  }, []);
+  }, [isListening]);
 
   // Запрос разрешения на микрофон
   const requestMicPermission = useCallback(async () => {
@@ -100,10 +112,8 @@ const VoiceAssistant = () => {
 
     setIsProcessing(true);
     try {
-      // Анонимная аутентификация
       const { user } = await signInAnonymously(auth);
       
-      // Создаем объект пользователя
       const appUser: User = {
         id: user.uid,
         name: username.trim()
@@ -145,12 +155,10 @@ const VoiceAssistant = () => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
       const user = JSON.parse(savedUser);
-      // Проверяем, аутентифицирован ли пользователь
       if (auth.currentUser?.uid === user.id) {
         setCurrentUser(user);
         setShowAuthForm(false);
       } else {
-        // Если нет - просим войти снова
         localStorage.removeItem('currentUser');
       }
     }
@@ -173,7 +181,8 @@ const VoiceAssistant = () => {
         points: doc.data().points,
         expanded: false,
         ownerId: doc.data().ownerId,
-        createdAt: doc.data().createdAt
+        createdAt: doc.data().createdAt,
+        lastAccessed: doc.data().lastAccessed
       }));
       setTeams(loadedTeams);
     }, (error) => {
@@ -190,7 +199,13 @@ const VoiceAssistant = () => {
     if (!micPermissionGranted || !currentUser) return;
 
     if (isListening) {
-      recognitionRef.current?.start();
+      try {
+        recognitionRef.current?.start();
+        setText('Говорите...');
+      } catch (error) {
+        console.error('Ошибка запуска распознавания:', error);
+        setIsListening(false);
+      }
     } else {
       recognitionRef.current?.stop();
     }
@@ -219,7 +234,8 @@ const VoiceAssistant = () => {
       }
 
       await updateDoc(teamRef, {
-        points: increment(delta)
+        points: increment(delta),
+        lastAccessed: new Date().toISOString() // Обновляем метку последнего доступа
       });
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
@@ -235,31 +251,53 @@ const VoiceAssistant = () => {
     if (!currentUser || teams.length === 0) return;
 
     const normalizedCommand = command.toLowerCase().trim();
-    const match = normalizedCommand.match(
-      /(команда|команде)\s+(\d+)\s+(плюс|минус|\+|\-)\s*(\d+)/i
-    );
     
-    if (match) {
-      const teamNumber = parseInt(match[2]);
-      const operator = match[3];
-      let points = parseInt(match[4]);
+    // Команды управления микрофоном
+    if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
+      setIsListening(false);
+      setText('Микрофон выключен');
+      return;
+    }
+
+    if (normalizedCommand.includes('старт') || normalizedCommand.includes('начать')) {
+      if (!isListening) {
+        setIsListening(true);
+        setText('Микрофон включен');
+      }
+      return;
+    }
+
+    // Команды для работы с очками
+    const pointsMatch = normalizedCommand.match(
+      /(команда|команде|команду)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
+    );
+
+    if (pointsMatch) {
+      const teamNumber = parseInt(pointsMatch[2]);
+      const operator = pointsMatch[3].toLowerCase();
+      let points = parseInt(pointsMatch[4]) || 1;
       
-      if (operator === 'минус' || operator === '-') {
+      if (operator.includes('минус') || operator === '-' || operator.includes('убрать') || operator.includes('снять')) {
         points = -points;
       }
       
       const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
       
       if (teamToUpdate) {
-        await updateTeamPoints(teamToUpdate.id, points);
-        setText(`Выполнено: ${command}`);
+        try {
+          await updateTeamPoints(teamToUpdate.id, points);
+          setText(`Команда ${teamNumber}: ${points > 0 ? '+' : ''}${points} очков`);
+        } catch (error) {
+          setText(`Ошибка изменения очков команды ${teamNumber}`);
+        }
       } else {
-        setText(`Ошибка: команды ${teamNumber} не существует`);
+        setText(`Команда ${teamNumber} не найдена`);
       }
-    } else {
-      setText(`Не распознано: ${command}`);
+      return;
     }
-  }, [currentUser, teams, updateTeamPoints]);
+
+    setText(`Не распознано: "${normalizedCommand}"`);
+  }, [currentUser, teams, isListening, updateTeamPoints]);
 
   // Создание команд с удалением старых
   const createTeams = useCallback(async () => {
@@ -279,7 +317,7 @@ const VoiceAssistant = () => {
     setText("Создание команд...");
     
     try {
-      // 1. Сначала удаляем все старые команды пользователя
+      // Удаление всех существующих команд пользователя
       const teamsQuery = query(
         collection(db, 'teams'),
         where('ownerId', '==', currentUser.id)
@@ -288,12 +326,11 @@ const VoiceAssistant = () => {
       const querySnapshot = await getDocs(teamsQuery);
       const batch = writeBatch(db);
       
-      // Добавляем операции удаления в batch
       querySnapshot.forEach((doc) => {
         batch.delete(doc.ref);
       });
 
-      // 2. Создаем новые команды
+      // Создание новых команд
       const people = Array.from({ length: peopleCount }, (_, i) => i + 1);
       const shuffled = [...people].sort(() => 0.5 - Math.random());
 
@@ -309,11 +346,11 @@ const VoiceAssistant = () => {
           members,
           points: 0,
           ownerId: currentUser.id,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          lastAccessed: new Date().toISOString()
         });
       }
 
-      // Выполняем все операции одной транзакцией
       await batch.commit();
       
       setSuccessMessage(`Успешно создано ${teamCount} команд с ${peopleCount} участниками`);
@@ -338,6 +375,40 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, teamCount, peopleCount]);
 
+  // Очистка неактивных команд
+  const cleanupInactiveTeams = useCallback(async (inactiveDays = 7) => {
+    if (!currentUser) return;
+
+    setIsProcessing(true);
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - inactiveDays);
+
+      const teamsQuery = query(
+        collection(db, 'teams'),
+        where('ownerId', '==', currentUser.id),
+        where('lastAccessed', '<', cutoffDate.toISOString())
+      );
+
+      const snapshot = await getDocs(teamsQuery);
+      const batch = writeBatch(db);
+      
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+      setSuccessMessage(`Удалено ${snapshot.size} неактивных команд`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error("Ошибка очистки неактивных команд:", error);
+      setErrorMessage("Не удалось очистить неактивные команды");
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [currentUser]);
+
   // Переключение отображения участников команды
   const toggleTeamExpansion = useCallback((teamId: string) => {
     setTeams(prevTeams => 
@@ -348,14 +419,24 @@ const VoiceAssistant = () => {
   }, []);
 
   // Обработчик клика по микрофону
-  const handleMicClick = useCallback(() => {
+  const handleMicClick = useCallback(async () => {
     if (!micPermissionGranted) {
-      setErrorMessage("Пожалуйста, разрешите доступ к микрофону в настройках браузера");
-      setTimeout(() => setErrorMessage(''), 3000);
-      return;
+      try {
+        await requestMicPermission();
+        if (!micPermissionGranted) {
+          setErrorMessage("Не удалось получить доступ к микрофону");
+          setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+      } catch (error) {
+        setErrorMessage("Ошибка доступа к микрофону");
+        setTimeout(() => setErrorMessage(''), 3000);
+        return;
+      }
     }
+
     setIsListening(prev => !prev);
-  }, [micPermissionGranted]);
+  }, [micPermissionGranted, requestMicPermission]);
 
   // Изменение количества команд
   const handleTeamCountChange = useCallback((value: number) => {
@@ -430,16 +511,28 @@ const VoiceAssistant = () => {
         <div className="teams-section">
           <div className="section-header">
             <h2>Управление командами</h2>
-            <button 
-              className="create-teams-button"
-              onClick={() => setShowTeamCreator(true)}
-              disabled={isProcessing}
-            >
-              <svg viewBox="0 0 24 24" className="icon">
-                <path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
-              </svg>
-              Создать команды
-            </button>
+            <div className="team-actions">
+              <button 
+                className="create-teams-button"
+                onClick={() => setShowTeamCreator(true)}
+                disabled={isProcessing}
+              >
+                <svg viewBox="0 0 24 24" className="icon">
+                  <path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+                </svg>
+                Создать команды
+              </button>
+              <button 
+                className="cleanup-button"
+                onClick={() => cleanupInactiveTeams()}
+                disabled={isProcessing || teams.length === 0}
+              >
+                <svg viewBox="0 0 24 24" className="icon">
+                  <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                </svg>
+                Очистить неактивные
+              </button>
+            </div>
           </div>
 
           {teams.length > 0 ? (
@@ -494,6 +587,12 @@ const VoiceAssistant = () => {
                               </span>
                             ))}
                           </div>
+                        </div>
+                        <div className="team-metadata">
+                          <span>Создана: {new Date(team.createdAt || '').toLocaleString()}</span>
+                          {team.lastAccessed && (
+                            <span>Последняя активность: {new Date(team.lastAccessed).toLocaleString()}</span>
+                          )}
                         </div>
                       </div>
                     )}

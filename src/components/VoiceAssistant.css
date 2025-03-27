@@ -556,3 +556,36 @@ body {
   background-color: #cccccc;
   cursor: not-allowed;
 }
+
+.team-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.cleanup-button {
+  background-color: #ff9800;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.cleanup-button:hover {
+  background-color: #f57c00;
+}
+
+.cleanup-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.team-metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 10px;
+}
