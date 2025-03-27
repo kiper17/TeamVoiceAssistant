@@ -176,6 +176,10 @@ const VoiceAssistant = () => {
         createdAt: doc.data().createdAt
       }));
       setTeams(loadedTeams);
+    }, (error) => {
+      console.error("Ошибка подписки на команды:", error);
+      setErrorMessage("Ошибка загрузки команд");
+      setTimeout(() => setErrorMessage(''), 3000);
     });
 
     return () => unsubscribe();
@@ -209,7 +213,8 @@ const VoiceAssistant = () => {
         throw new Error('Команда не найдена');
       }
 
-      if (teamSnap.data()?.ownerId !== currentUser.id) {
+      const teamData = teamSnap.data();
+      if (teamData.ownerId !== currentUser.id) {
         throw new Error('Нет прав для изменения этой команды');
       }
 
@@ -256,7 +261,7 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, teams, updateTeamPoints]);
 
-  // Создание команд с улучшенной обработкой ошибок
+  // Создание команд с удалением старых
   const createTeams = useCallback(async () => {
     if (!currentUser) {
       setErrorMessage("Требуется авторизация");
@@ -274,12 +279,21 @@ const VoiceAssistant = () => {
     setText("Создание команд...");
     
     try {
-      // Проверка аутентификации
-      if (!auth.currentUser) {
-        throw new Error("Пользователь не аутентифицирован");
-      }
-
+      // 1. Сначала удаляем все старые команды пользователя
+      const teamsQuery = query(
+        collection(db, 'teams'),
+        where('ownerId', '==', currentUser.id)
+      );
+      
+      const querySnapshot = await getDocs(teamsQuery);
       const batch = writeBatch(db);
+      
+      // Добавляем операции удаления в batch
+      querySnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      // 2. Создаем новые команды
       const people = Array.from({ length: peopleCount }, (_, i) => i + 1);
       const shuffled = [...people].sort(() => 0.5 - Math.random());
 
@@ -294,11 +308,12 @@ const VoiceAssistant = () => {
           name: `Команда ${i + 1}`,
           members,
           points: 0,
-          ownerId: auth.currentUser.uid,
+          ownerId: currentUser.id,
           createdAt: new Date().toISOString()
         });
       }
 
+      // Выполняем все операции одной транзакцией
       await batch.commit();
       
       setSuccessMessage(`Успешно создано ${teamCount} команд с ${peopleCount} участниками`);
@@ -310,7 +325,7 @@ const VoiceAssistant = () => {
       let errorMsg = "Ошибка при создании команд";
       if (error instanceof Error) {
         errorMsg = error.message.includes('permission-denied') 
-          ? `Ошибка доступа: ${error.message}\nПроверьте:\n1. Правила Firestore\n2. Совпадение projectId`
+          ? `Ошибка доступа: ${error.message}`
           : error.message.includes('network-error') 
             ? "Ошибка сети. Проверьте подключение к интернету"
             : error.message;
