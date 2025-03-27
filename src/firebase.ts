@@ -1,6 +1,7 @@
 // src/firebase.ts
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth, signInAnonymously } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -16,3 +17,5 @@ const app = initializeApp(firebaseConfig);
 
 // Инициализация Firestore
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+export { signInAnonymously };

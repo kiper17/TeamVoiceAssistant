@@ -5,7 +5,8 @@ import {
   increment, writeBatch, query, where,
   setDoc, getDoc
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { getAuth, signInAnonymously, signOut } from 'firebase/auth';
+import { db, auth } from '../firebase';
 import './VoiceAssistant.css';
 
 type Team = {
@@ -42,11 +43,6 @@ const VoiceAssistant = () => {
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
-
-  // Генерация ID пользователя
-  const generateUserId = useCallback(() => {
-    return 'user-' + Math.random().toString(36).substr(2, 9);
-  }, []);
 
   // Проверка поддержки голосового API
   useEffect(() => {
@@ -98,28 +94,49 @@ const VoiceAssistant = () => {
   }, [requestMicPermission]);
 
   // Авторизация пользователя
-  const handleLogin = useCallback((e: React.FormEvent) => {
+  const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username.trim()) {
-      const user: User = {
-        id: generateUserId(),
+    if (!username.trim()) return;
+
+    setIsProcessing(true);
+    try {
+      // Анонимная аутентификация
+      const { user } = await signInAnonymously(auth);
+      
+      // Создаем объект пользователя
+      const appUser: User = {
+        id: user.uid,
         name: username.trim()
       };
-      setCurrentUser(user);
+      
+      setCurrentUser(appUser);
       setShowAuthForm(false);
-      localStorage.setItem('currentUser', JSON.stringify(user));
+      localStorage.setItem('currentUser', JSON.stringify(appUser));
+    } catch (error) {
+      console.error('Ошибка аутентификации:', error);
+      setErrorMessage('Ошибка входа. Попробуйте снова');
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setIsProcessing(false);
     }
-  }, [username, generateUserId]);
+  }, [username]);
 
   // Выход из системы
-  const handleLogout = useCallback(() => {
-    setCurrentUser(null);
-    setTeams([]);
-    setShowAuthForm(true);
-    localStorage.removeItem('currentUser');
-    if (isListening) {
-      setIsListening(false);
-      recognitionRef.current?.stop();
+  const handleLogout = useCallback(async () => {
+    try {
+      await signOut(auth);
+      setCurrentUser(null);
+      setTeams([]);
+      setShowAuthForm(true);
+      localStorage.removeItem('currentUser');
+      if (isListening) {
+        setIsListening(false);
+        recognitionRef.current?.stop();
+      }
+    } catch (error) {
+      console.error('Ошибка выхода:', error);
+      setErrorMessage('Ошибка при выходе');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
   }, [isListening]);
 
@@ -127,8 +144,15 @@ const VoiceAssistant = () => {
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
-      setShowAuthForm(false);
+      const user = JSON.parse(savedUser);
+      // Проверяем, аутентифицирован ли пользователь
+      if (auth.currentUser?.uid === user.id) {
+        setCurrentUser(user);
+        setShowAuthForm(false);
+      } else {
+        // Если нет - просим войти снова
+        localStorage.removeItem('currentUser');
+      }
     }
   }, []);
 
@@ -178,7 +202,6 @@ const VoiceAssistant = () => {
 
     setIsProcessing(true);
     try {
-      // Проверяем права доступа перед обновлением
       const teamRef = doc(db, 'teams', teamId);
       const teamSnap = await getDoc(teamRef);
       
@@ -251,28 +274,12 @@ const VoiceAssistant = () => {
     setText("Создание команд...");
     
     try {
-      // 1. Проверка соединения с Firestore
-      const testDocRef = doc(collection(db, 'connection_test'));
-      await setDoc(testDocRef, { test: true });
-      await deleteDoc(testDocRef);
-
-      // 2. Удаление старых команд
-      const teamsQuery = query(
-        collection(db, 'teams'),
-        where('ownerId', '==', currentUser.id)
-      );
-      const snapshot = await getDocs(teamsQuery);
-      
-      if (!snapshot.empty) {
-        const deleteBatch = writeBatch(db);
-        snapshot.forEach(doc => {
-          deleteBatch.delete(doc.ref);
-        });
-        await deleteBatch.commit();
+      // Проверка аутентификации
+      if (!auth.currentUser) {
+        throw new Error("Пользователь не аутентифицирован");
       }
 
-      // 3. Создание новых команд
-      const createBatch = writeBatch(db);
+      const batch = writeBatch(db);
       const people = Array.from({ length: peopleCount }, (_, i) => i + 1);
       const shuffled = [...people].sort(() => 0.5 - Math.random());
 
@@ -283,16 +290,16 @@ const VoiceAssistant = () => {
         );
 
         const newTeamRef = doc(collection(db, 'teams'));
-        createBatch.set(newTeamRef, {
+        batch.set(newTeamRef, {
           name: `Команда ${i + 1}`,
           members,
           points: 0,
-          ownerId: currentUser.id,
+          ownerId: auth.currentUser.uid,
           createdAt: new Date().toISOString()
         });
       }
 
-      await createBatch.commit();
+      await batch.commit();
       
       setSuccessMessage(`Успешно создано ${teamCount} команд с ${peopleCount} участниками`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -303,7 +310,7 @@ const VoiceAssistant = () => {
       let errorMsg = "Ошибка при создании команд";
       if (error instanceof Error) {
         errorMsg = error.message.includes('permission-denied') 
-          ? `Ошибка доступа: ${error.message}\nПроверьте:\n1. Правила Firestore\n2. Совпадение projectId\n3. Авторизацию пользователя`
+          ? `Ошибка доступа: ${error.message}\nПроверьте:\n1. Правила Firestore\n2. Совпадение projectId`
           : error.message.includes('network-error') 
             ? "Ошибка сети. Проверьте подключение к интернету"
             : error.message;
