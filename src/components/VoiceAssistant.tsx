@@ -3,7 +3,7 @@ import {
   collection, doc, updateDoc, 
   getDocs, deleteDoc, onSnapshot, 
   increment, writeBatch, query, where,
-  setDoc
+  setDoc, getDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import './VoiceAssistant.css';
@@ -172,18 +172,30 @@ const VoiceAssistant = () => {
     };
   }, [isListening, micPermissionGranted, currentUser]);
 
-  // Обновление очков команды
+  // Обновление очков команды с проверкой прав
   const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
     if (!currentUser || isProcessing) return;
 
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, 'teams', teamId), {
+      // Проверяем права доступа перед обновлением
+      const teamRef = doc(db, 'teams', teamId);
+      const teamSnap = await getDoc(teamRef);
+      
+      if (!teamSnap.exists()) {
+        throw new Error('Команда не найдена');
+      }
+
+      if (teamSnap.data()?.ownerId !== currentUser.id) {
+        throw new Error('Нет прав для изменения этой команды');
+      }
+
+      await updateDoc(teamRef, {
         points: increment(delta)
       });
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
-      setErrorMessage("Не удалось изменить очки");
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось изменить очки");
       setTimeout(() => setErrorMessage(''), 3000);
     } finally {
       setIsProcessing(false);
@@ -221,7 +233,7 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, teams, updateTeamPoints]);
 
-  // Создание команд (исправленная версия)
+  // Создание команд с улучшенной обработкой ошибок
   const createTeams = useCallback(async () => {
     if (!currentUser) {
       setErrorMessage("Требуется авторизация");
@@ -248,16 +260,15 @@ const VoiceAssistant = () => {
       );
       const snapshot = await getDocs(teamsQuery);
       
-      // Проверяем, есть ли что удалять
       if (!snapshot.empty) {
         snapshot.forEach(doc => {
           batch.delete(doc.ref);
         });
-        await batch.commit(); // Фиксируем удаление
+        await batch.commit();
       }
 
       // 2. Создание новых команд
-      const newBatch = writeBatch(db); // Новая пачка для создания
+      const newBatch = writeBatch(db);
       const people = Array.from({ length: peopleCount }, (_, i) => i + 1);
       const shuffled = [...people].sort(() => 0.5 - Math.random());
 
@@ -282,13 +293,12 @@ const VoiceAssistant = () => {
       setSuccessMessage(`Успешно создано ${teamCount} команд с ${peopleCount} участниками`);
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowTeamCreator(false);
-      setText("Команды успешно созданы!");
     } catch (error) {
       console.error("Ошибка создания команд:", error);
       
       let errorMsg = "Ошибка при создании команд";
       if (error instanceof Error) {
-        errorMsg = error.message.includes('Missing or insufficient permissions') 
+        errorMsg = error.message.includes('permission-denied') 
           ? "Ошибка: Нет прав доступа. Проверьте правила Firestore"
           : error.message.includes('network-error') 
             ? "Ошибка сети. Проверьте подключение"
@@ -297,7 +307,6 @@ const VoiceAssistant = () => {
       
       setErrorMessage(errorMsg);
       setTimeout(() => setErrorMessage(''), 3000);
-      setText(errorMsg);
     } finally {
       setIsProcessing(false);
     }
@@ -365,7 +374,6 @@ const VoiceAssistant = () => {
 
   return (
     <div className="voice-assistant-container">
-      {/* Сообщения об успехе и ошибках */}
       {successMessage && (
         <div className="message success">
           {successMessage}
@@ -507,7 +515,7 @@ const VoiceAssistant = () => {
                 )}
               </div>
             </div>
-            
+
             <div className="voice-output">
               <h4>Распознанная команда:</h4>
               <div className="output-text">
