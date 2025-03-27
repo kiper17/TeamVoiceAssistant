@@ -251,9 +251,12 @@ const VoiceAssistant = () => {
     setText("Создание команд...");
     
     try {
-      const batch = writeBatch(db);
+      // 1. Проверка соединения с Firestore
+      const testDocRef = doc(collection(db, 'connection_test'));
+      await setDoc(testDocRef, { test: true });
+      await deleteDoc(testDocRef);
 
-      // 1. Удаление старых команд
+      // 2. Удаление старых команд
       const teamsQuery = query(
         collection(db, 'teams'),
         where('ownerId', '==', currentUser.id)
@@ -261,14 +264,15 @@ const VoiceAssistant = () => {
       const snapshot = await getDocs(teamsQuery);
       
       if (!snapshot.empty) {
+        const deleteBatch = writeBatch(db);
         snapshot.forEach(doc => {
-          batch.delete(doc.ref);
+          deleteBatch.delete(doc.ref);
         });
-        await batch.commit();
+        await deleteBatch.commit();
       }
 
-      // 2. Создание новых команд
-      const newBatch = writeBatch(db);
+      // 3. Создание новых команд
+      const createBatch = writeBatch(db);
       const people = Array.from({ length: peopleCount }, (_, i) => i + 1);
       const shuffled = [...people].sort(() => 0.5 - Math.random());
 
@@ -279,7 +283,7 @@ const VoiceAssistant = () => {
         );
 
         const newTeamRef = doc(collection(db, 'teams'));
-        newBatch.set(newTeamRef, {
+        createBatch.set(newTeamRef, {
           name: `Команда ${i + 1}`,
           members,
           points: 0,
@@ -288,7 +292,7 @@ const VoiceAssistant = () => {
         });
       }
 
-      await newBatch.commit();
+      await createBatch.commit();
       
       setSuccessMessage(`Успешно создано ${teamCount} команд с ${peopleCount} участниками`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -299,14 +303,14 @@ const VoiceAssistant = () => {
       let errorMsg = "Ошибка при создании команд";
       if (error instanceof Error) {
         errorMsg = error.message.includes('permission-denied') 
-          ? "Ошибка: Нет прав доступа. Проверьте правила Firestore"
+          ? `Ошибка доступа: ${error.message}\nПроверьте:\n1. Правила Firestore\n2. Совпадение projectId\n3. Авторизацию пользователя`
           : error.message.includes('network-error') 
-            ? "Ошибка сети. Проверьте подключение"
+            ? "Ошибка сети. Проверьте подключение к интернету"
             : error.message;
       }
       
       setErrorMessage(errorMsg);
-      setTimeout(() => setErrorMessage(''), 3000);
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setIsProcessing(false);
     }
@@ -381,7 +385,9 @@ const VoiceAssistant = () => {
       )}
       {errorMessage && (
         <div className="message error">
-          {errorMessage}
+          {errorMessage.split('\n').map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
         </div>
       )}
 
