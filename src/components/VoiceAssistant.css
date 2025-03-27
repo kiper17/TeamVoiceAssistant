@@ -4,9 +4,10 @@ body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: #f5f5f5;
   color: #333;
+  transition: background-color 0.3s, color 0.3s;
 }
 
-/* Основной контейнер */
+/* Основной контейнер приложения */
 .voice-assistant-container {
   display: flex;
   flex-direction: column;
@@ -17,44 +18,121 @@ body {
   background-color: #fff;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   position: relative;
+  transition: background-color 0.3s;
 }
 
-/* Шапка приложения - перенесено в правый верхний угол */
+/* Шапка приложения */
 .app-header {
-  position: absolute;
-  top: 20px;
-  right: 20px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 15px 20px;
+  position: relative;
+  z-index: 100;
+}
+
+.user-info-container {
   display: flex;
   align-items: center;
   gap: 15px;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 8px 15px;
+  border-radius: 20px;
+  border: 1px solid #ddd;
+  transition: all 0.3s;
 }
 
 .user-info {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.9rem;
+}
+
+.username {
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: #333;
+  transition: color 0.3s;
 }
 
 .logout-button {
-  background-color: transparent;
-  color: #666;
-  border: 1px solid #ddd;
+  background-color: #f44336;
+  color: white;
+  border: none;
   padding: 5px 10px;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 0.85rem;
   transition: all 0.3s;
-  font-size: 0.8rem;
 }
 
 .logout-button:hover {
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: #d32f2f;
+  transform: translateY(-1px);
 }
 
 .logout-button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+  transform: none;
+}
+
+.settings-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.settings-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  transform: rotate(30deg);
+}
+
+.settings-button .icon {
+  width: 20px;
+  height: 20px;
+  transition: fill 0.3s;
+}
+
+/* Меню настроек */
+.settings-menu {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s;
+  z-index: 100;
+}
+
+.settings-menu.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.settings-item:hover {
+  background-color: #f0f0f0;
 }
 
 /* Основное содержимое */
@@ -62,7 +140,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 30px;
-  margin-top: 60px; /* Добавлено место для шапки */
+  margin-top: 20px;
+  padding: 0 10px;
 }
 
 /* Секция команд */
@@ -71,40 +150,65 @@ body {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
 }
 
 .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 20px;
 }
 
-.create-teams-button {
+.section-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #333;
+  transition: color 0.3s;
+}
+
+.management-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.create-teams-button, 
+.cleanup-button {
+  padding: 8px 15px;
+  font-size: 0.9rem;
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: #4CAF50;
-  color: white;
   border: none;
-  padding: 10px 15px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+}
+
+.create-teams-button {
+  background-color: #4CAF50;
+  color: white;
 }
 
 .create-teams-button:hover {
   background-color: #388E3C;
+  transform: translateY(-1px);
 }
 
-.create-teams-button:disabled {
+.cleanup-button {
+  background-color: #ff9800;
+  color: white;
+}
+
+.cleanup-button:hover {
+  background-color: #f57c00;
+  transform: translateY(-1px);
+}
+
+.create-teams-button:disabled,
+.cleanup-button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
-}
-
-.icon {
-  width: 20px;
-  height: 20px;
+  transform: none;
 }
 
 /* Список команд */
@@ -133,6 +237,7 @@ body {
   padding: 15px;
   cursor: pointer;
   background-color: #fff;
+  transition: background-color 0.3s;
 }
 
 .team-info {
@@ -144,10 +249,13 @@ body {
 .team-name {
   font-weight: bold;
   font-size: 1.1rem;
+  color: #333;
+  transition: color 0.3s;
 }
 
 .team-points {
   color: #666;
+  transition: color 0.3s;
 }
 
 .team-actions {
@@ -163,7 +271,7 @@ body {
   border-radius: 4px;
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 
 .points-button.plus {
@@ -176,14 +284,26 @@ body {
   color: white;
 }
 
+.points-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
 .points-button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .expand-icon {
   margin-left: 10px;
   font-size: 0.9rem;
+  transition: transform 0.3s;
+}
+
+.team-card.expanded .expand-icon {
+  transform: rotate(180deg);
 }
 
 /* Детали команды */
@@ -191,11 +311,14 @@ body {
   padding: 15px;
   background-color: #f5f5f5;
   border-top: 1px solid #ddd;
+  transition: background-color 0.3s;
 }
 
 .team-members h4 {
   margin-top: 0;
   margin-bottom: 10px;
+  color: #333;
+  transition: color 0.3s;
 }
 
 .members-list {
@@ -209,6 +332,17 @@ body {
   padding: 5px 10px;
   border-radius: 15px;
   font-size: 0.9rem;
+  transition: background-color 0.3s;
+}
+
+.team-metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 10px;
+  transition: color 0.3s;
 }
 
 /* Состояние "нет команд" */
@@ -222,6 +356,7 @@ body {
   background-color: #f9f9f9;
   border-radius: 8px;
   border: 1px dashed #ccc;
+  transition: all 0.3s;
 }
 
 .empty-icon {
@@ -229,6 +364,13 @@ body {
   height: 60px;
   margin-bottom: 15px;
   opacity: 0.6;
+  transition: opacity 0.3s;
+}
+
+.empty-state p {
+  margin: 0 0 15px;
+  color: #666;
+  transition: color 0.3s;
 }
 
 .primary-button {
@@ -239,11 +381,18 @@ body {
   border-radius: 4px;
   cursor: pointer;
   margin-top: 15px;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
 }
 
 .primary-button:hover {
   background-color: #0b7dda;
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Секция голосового управления */
@@ -252,6 +401,7 @@ body {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
 }
 
 .voice-control-card {
@@ -287,6 +437,10 @@ body {
   animation: pulse 1.5s infinite;
 }
 
+.mic-button:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
 .mic-button:disabled {
   background-color: #e0e0e0;
   cursor: not-allowed;
@@ -301,10 +455,12 @@ body {
 .mic-icon {
   width: 40px;
   height: 40px;
+  transition: fill 0.3s;
 }
 
 .mic-status {
   text-align: center;
+  font-size: 0.9rem;
 }
 
 .warning {
@@ -316,11 +472,15 @@ body {
   font-weight: bold;
 }
 
-/* Убрана секция с примерами команд */
-
 /* Вывод распознанного текста */
 .voice-output {
   margin-top: 15px;
+}
+
+.voice-output h4 {
+  margin: 0 0 10px;
+  color: #333;
+  transition: color 0.3s;
 }
 
 .output-text {
@@ -329,11 +489,13 @@ body {
   background-color: #f5f5f5;
   border-radius: 4px;
   border: 1px solid #ddd;
+  transition: all 0.3s;
 }
 
 .placeholder {
   color: #999;
   font-style: italic;
+  transition: color 0.3s;
 }
 
 /* Модальное окно */
@@ -357,6 +519,7 @@ body {
   max-width: 500px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   overflow: hidden;
+  transition: all 0.3s;
 }
 
 .modal-header {
@@ -367,6 +530,12 @@ body {
   border-bottom: 1px solid #eee;
 }
 
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+  transition: color 0.3s;
+}
+
 .close-button {
   background: none;
   border: none;
@@ -374,15 +543,18 @@ body {
   cursor: pointer;
   color: #666;
   padding: 5px;
+  transition: all 0.3s;
 }
 
 .close-button:hover {
   color: #333;
+  transform: rotate(90deg);
 }
 
 .close-button:disabled {
   color: #ccc;
   cursor: not-allowed;
+  transform: none;
 }
 
 .modal-body {
@@ -397,6 +569,8 @@ body {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
+  color: #333;
+  transition: color 0.3s;
 }
 
 .number-input-group {
@@ -416,6 +590,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.3s;
+}
+
+.number-input-group button:hover:not(:disabled) {
+  background-color: #e0e0e0;
 }
 
 .number-input-group button:disabled {
@@ -431,6 +610,7 @@ body {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+  transition: all 0.3s;
 }
 
 .modal-footer {
@@ -448,7 +628,7 @@ body {
   padding: 10px 20px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
 }
 
 .secondary-button:hover {
@@ -501,6 +681,11 @@ body {
 
 .browser-warning h2 {
   color: #f44336;
+  margin-top: 0;
+}
+
+.browser-warning p {
+  margin-bottom: 10px;
 }
 
 /* Форма авторизации */
@@ -510,6 +695,7 @@ body {
   align-items: center;
   height: 100vh;
   background-color: #f5f5f5;
+  transition: background-color 0.3s;
 }
 
 .auth-form {
@@ -519,12 +705,15 @@ body {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 100%;
   max-width: 400px;
+  transition: all 0.3s;
 }
 
 .auth-form h2 {
   margin-top: 0;
   margin-bottom: 20px;
   text-align: center;
+  color: #333;
+  transition: color 0.3s;
 }
 
 .auth-form input {
@@ -534,6 +723,7 @@ body {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+  transition: all 0.3s;
 }
 
 .auth-form button {
@@ -545,7 +735,7 @@ body {
   border-radius: 4px;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
 }
 
 .auth-form button:hover {
@@ -557,35 +747,174 @@ body {
   cursor: not-allowed;
 }
 
-.team-actions {
-  display: flex;
-  gap: 10px;
+/* Тёмная тема */
+.dark-mode {
+  background-color: #121212;
+  color: #e0e0e0;
 }
 
-.cleanup-button {
-  background-color: #ff9800;
-  color: white;
-  border: none;
-  padding: 10px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+.dark-mode .voice-assistant-container,
+.dark-mode .teams-section,
+.dark-mode .voice-control-section,
+.dark-mode .team-creator-modal,
+.dark-mode .auth-form {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
-.cleanup-button:hover {
-  background-color: #f57c00;
+.dark-mode .user-info-container {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: #444;
 }
 
-.cleanup-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
+.dark-mode .username,
+.dark-mode .section-header h2,
+.dark-mode .team-name,
+.dark-mode .team-members h4,
+.dark-mode .modal-header h3,
+.dark-mode .auth-form h2 {
+  color: #e0e0e0;
 }
 
-.team-metadata {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 0.8rem;
-  color: #666;
-  margin-top: 10px;
+.dark-mode .team-card,
+.dark-mode .voice-control-card,
+.dark-mode .output-text {
+  background-color: #2d2d2d;
+  border-color: #444;
+}
+
+.dark-mode .team-details {
+  background-color: #252525;
+}
+
+.dark-mode .member-badge {
+  background-color: #3d3d3d;
+}
+
+.dark-mode .empty-state {
+  background-color: #252525;
+  border-color: #444;
+}
+
+.dark-mode .empty-state p,
+.dark-mode .team-points,
+.dark-mode .team-metadata {
+  color: #aaa;
+}
+
+.dark-mode input,
+.dark-mode .number-input-group input {
+  background-color: #333;
+  color: #fff;
+  border-color: #555;
+}
+
+.dark-mode .settings-menu,
+.dark-mode .settings-item:hover {
+  background-color: #2d2d2d;
+}
+
+.dark-mode .settings-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .secondary-button {
+  background-color: #333;
+  color: #e0e0e0;
+}
+
+.dark-mode .secondary-button:hover {
+  background-color: #3d3d3d;
+}
+
+.dark-mode .close-button {
+  color: #aaa;
+}
+
+.dark-mode .close-button:hover {
+  color: #e0e0e0;
+}
+
+/* Адаптация для мобильных устройств */
+@media (max-width: 768px) {
+  .voice-assistant-container {
+    padding: 10px;
+  }
+
+  .app-header {
+    padding: 10px;
+  }
+
+  .user-info-container {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .user-info {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+  }
+
+  .management-actions {
+    flex-direction: column;
+  }
+
+  .create-teams-button,
+  .cleanup-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .team-header {
+    padding: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .team-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mic-button {
+    width: 60px;
+    height: 60px;
+  }
+
+  .mic-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .output-text {
+    min-height: 50px;
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  .modal-body {
+    padding: 15px;
+  }
+
+  .number-input-group {
+    flex-wrap: wrap;
+  }
+
+  .number-input-group input {
+    width: 100%;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+  }
+
+  .secondary-button,
+  .primary-button {
+    width: 100%;
+  }
 }

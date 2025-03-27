@@ -26,7 +26,6 @@ type User = {
 };
 
 const VoiceAssistant = () => {
-  // Состояния
   const [isListening, setIsListening] = useState(false);
   const [text, setText] = useState('');
   const [isSupported, setIsSupported] = useState(true);
@@ -41,11 +40,24 @@ const VoiceAssistant = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
 
-  // Проверка поддержки голосового API
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      setIsDarkMode(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+    document.body.className = isDarkMode ? 'dark-mode' : '';
+  }, [isDarkMode]);
+
   useEffect(() => {
     if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
       setIsSupported(false);
@@ -89,7 +101,6 @@ const VoiceAssistant = () => {
     };
   }, [isListening]);
 
-  // Запрос разрешения на микрофон
   const requestMicPermission = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -105,7 +116,6 @@ const VoiceAssistant = () => {
     requestMicPermission();
   }, [requestMicPermission]);
 
-  // Авторизация пользователя
   const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
@@ -131,7 +141,6 @@ const VoiceAssistant = () => {
     }
   }, [username]);
 
-  // Выход из системы
   const handleLogout = useCallback(async () => {
     try {
       await signOut(auth);
@@ -150,7 +159,6 @@ const VoiceAssistant = () => {
     }
   }, [isListening]);
 
-  // Загрузка сохраненного пользователя
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
@@ -164,7 +172,6 @@ const VoiceAssistant = () => {
     }
   }, []);
 
-  // Подписка на команды пользователя
   useEffect(() => {
     if (!currentUser) return;
 
@@ -194,7 +201,6 @@ const VoiceAssistant = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Управление голосовым помощником
   useEffect(() => {
     if (!micPermissionGranted || !currentUser) return;
 
@@ -215,7 +221,6 @@ const VoiceAssistant = () => {
     };
   }, [isListening, micPermissionGranted, currentUser]);
 
-  // Обновление очков команды с проверкой прав
   const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
     if (!currentUser || isProcessing) return;
 
@@ -235,7 +240,7 @@ const VoiceAssistant = () => {
 
       await updateDoc(teamRef, {
         points: increment(delta),
-        lastAccessed: new Date().toISOString() // Обновляем метку последнего доступа
+        lastAccessed: new Date().toISOString()
       });
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
@@ -246,13 +251,11 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, isProcessing]);
 
-  // Обработка голосовых команд
   const handleVoiceCommand = useCallback(async (command: string) => {
     if (!currentUser || teams.length === 0) return;
 
     const normalizedCommand = command.toLowerCase().trim();
     
-    // Команды управления микрофоном
     if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
       setIsListening(false);
       setText('Микрофон выключен');
@@ -267,7 +270,6 @@ const VoiceAssistant = () => {
       return;
     }
 
-    // Команды для работы с очками
     const pointsMatch = normalizedCommand.match(
       /(команда|команде|команду)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
     );
@@ -299,7 +301,6 @@ const VoiceAssistant = () => {
     setText(`Не распознано: "${normalizedCommand}"`);
   }, [currentUser, teams, isListening, updateTeamPoints]);
 
-  // Создание команд с удалением старых
   const createTeams = useCallback(async () => {
     if (!currentUser) {
       setErrorMessage("Требуется авторизация");
@@ -317,7 +318,6 @@ const VoiceAssistant = () => {
     setText("Создание команд...");
     
     try {
-      // Удаление всех существующих команд пользователя
       const teamsQuery = query(
         collection(db, 'teams'),
         where('ownerId', '==', currentUser.id)
@@ -330,7 +330,6 @@ const VoiceAssistant = () => {
         batch.delete(doc.ref);
       });
 
-      // Создание новых команд
       const people = Array.from({ length: peopleCount }, (_, i) => i + 1);
       const shuffled = [...people].sort(() => 0.5 - Math.random());
 
@@ -375,7 +374,6 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, teamCount, peopleCount]);
 
-  // Очистка неактивных команд
   const cleanupInactiveTeams = useCallback(async (inactiveDays = 7) => {
     if (!currentUser) return;
 
@@ -409,7 +407,6 @@ const VoiceAssistant = () => {
     }
   }, [currentUser]);
 
-  // Переключение отображения участников команды
   const toggleTeamExpansion = useCallback((teamId: string) => {
     setTeams(prevTeams => 
       prevTeams.map(team => 
@@ -418,7 +415,6 @@ const VoiceAssistant = () => {
     );
   }, []);
 
-  // Обработчик клика по микрофону
   const handleMicClick = useCallback(async () => {
     if (!micPermissionGranted) {
       try {
@@ -438,15 +434,31 @@ const VoiceAssistant = () => {
     setIsListening(prev => !prev);
   }, [micPermissionGranted, requestMicPermission]);
 
-  // Изменение количества команд
   const handleTeamCountChange = useCallback((value: number) => {
     setTeamCount(Math.max(1, Math.min(10, value)));
   }, []);
 
-  // Изменение количества участников
   const handlePeopleCountChange = useCallback((value: number) => {
     setPeopleCount(Math.max(1, Math.min(100, value)));
   }, []);
+
+  const SettingsMenu = () => (
+    <div className={`settings-menu ${showSettings ? 'visible' : ''}`}>
+      <div className="settings-item" onClick={() => {
+        setIsDarkMode(!isDarkMode);
+        setShowSettings(false);
+      }}>
+        <svg viewBox="0 0 24 24" className="icon">
+          {isDarkMode ? (
+            <path fill="currentColor" d="M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8M12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18M20,8.69V4H15.31L12,0.69L8.69,4H4V8.69L0.69,12L4,15.31V20H8.69L12,23.31L15.31,20H20V15.31L23.31,12L20,8.69Z" />
+          ) : (
+            <path fill="currentColor" d="M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A9,9 0 0,0 21,12A9,9 0 0,0 12,3Z" />
+          )}
+        </svg>
+        {isDarkMode ? 'Светлая тема' : 'Тёмная тема'}
+      </div>
+    </div>
+  );
 
   if (!isSupported) {
     return (
@@ -480,7 +492,7 @@ const VoiceAssistant = () => {
   }
 
   return (
-    <div className="voice-assistant-container">
+    <div className={`voice-assistant-container ${isDarkMode ? 'dark-mode' : ''}`}>
       {successMessage && (
         <div className="message success">
           {successMessage}
@@ -495,44 +507,51 @@ const VoiceAssistant = () => {
       )}
 
       <header className="app-header">
-        <div className="user-info">
-          <span>Пользователь: {currentUser?.name}</span>
+        <div className="user-info-container">
+          <div className="user-info">
+            <span className="username">Пользователь: {currentUser?.name}</span>
+            <button 
+              onClick={handleLogout} 
+              className="logout-button"
+              disabled={isProcessing}
+            >
+              Выйти
+            </button>
+          </div>
           <button 
-            onClick={handleLogout} 
-            className="logout-button"
-            disabled={isProcessing}
+            className="settings-button"
+            onClick={() => setShowSettings(!showSettings)}
           >
-            Выйти
+            <svg viewBox="0 0 24 24" className="icon">
+              <path fill="currentColor" d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" />
+            </svg>
           </button>
         </div>
+        
+        <SettingsMenu />
       </header>
 
       <main className="app-main">
         <div className="teams-section">
           <div className="section-header">
             <h2>Управление командами</h2>
-            <div className="team-actions">
-              <button 
-                className="create-teams-button"
-                onClick={() => setShowTeamCreator(true)}
-                disabled={isProcessing}
-              >
-                <svg viewBox="0 0 24 24" className="icon">
-                  <path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
-                </svg>
-                Создать команды
-              </button>
-              <button 
-                className="cleanup-button"
-                onClick={() => cleanupInactiveTeams()}
-                disabled={isProcessing || teams.length === 0}
-              >
-                <svg viewBox="0 0 24 24" className="icon">
-                  <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
-                </svg>
-                Очистить неактивные
-              </button>
-            </div>
+          </div>
+
+          <div className="management-actions">
+            <button 
+              className="create-teams-button"
+              onClick={() => setShowTeamCreator(true)}
+              disabled={isProcessing}
+            >
+              Создать команды
+            </button>
+            <button 
+              className="cleanup-button"
+              onClick={() => cleanupInactiveTeams()}
+              disabled={isProcessing || teams.length === 0}
+            >
+              Очистить неактивные
+            </button>
           </div>
 
           {teams.length > 0 ? (
