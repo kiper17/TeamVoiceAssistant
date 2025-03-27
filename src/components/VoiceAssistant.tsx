@@ -34,6 +34,7 @@ const VoiceAssistant = () => {
   const [peopleCount, setPeopleCount] = useState(4);
   const [teams, setTeams] = useState<Team[]>([]);
   const [micPermissionGranted, setMicPermissionGranted] = useState(false);
+  const [micStatus, setMicStatus] = useState<'idle'|'requested'|'granted'|'denied'>('idle');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [showAuthForm, setShowAuthForm] = useState(true);
@@ -59,9 +60,31 @@ const VoiceAssistant = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
+    // Проверка поддержки браузера с учетом мобильных устройств
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isChrome = /Chrome/i.test(navigator.userAgent);
+    const isSafari = /Safari/i.test(navigator.userAgent);
+
     if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
       setIsSupported(false);
       return;
+    }
+
+    // Дополнительные проверки для мобильных устройств
+    if (isMobile) {
+      if (!isChrome && !isSafari) {
+        setIsSupported(false);
+        setErrorMessage('Для работы голосового ассистента используйте Chrome или Safari на мобильном устройстве');
+        setTimeout(() => setErrorMessage(''), 5000);
+        return;
+      }
+
+      if (!window.isSecureContext) {
+        setIsSupported(false);
+        setErrorMessage('Для работы микрофона требуется HTTPS соединение');
+        setTimeout(() => setErrorMessage(''), 5000);
+        return;
+      }
     }
     
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -84,6 +107,7 @@ const VoiceAssistant = () => {
       console.error('Ошибка распознавания:', event.error);
       if (event.error === 'not-allowed') {
         setMicPermissionGranted(false);
+        setMicStatus('denied');
       }
       setIsListening(false);
     };
@@ -94,10 +118,21 @@ const VoiceAssistant = () => {
       }
     };
 
+    // Обработка потери фокуса на мобильных устройствах
+    const handleBlur = () => {
+      if (isListening) {
+        setIsListening(false);
+        setText('Микрофон выключен из-за переключения вкладки');
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      window.removeEventListener('blur', handleBlur);
     };
   }, [isListening]);
 
@@ -106,14 +141,20 @@ const VoiceAssistant = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
       setMicPermissionGranted(true);
+      setMicStatus('granted');
     } catch (error) {
       console.error('Доступ к микрофону отклонен:', error);
       setMicPermissionGranted(false);
+      setMicStatus('denied');
     }
   }, []);
 
   useEffect(() => {
-    requestMicPermission();
+    // На мобильных устройствах не запрашиваем разрешение автоматически
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (!isMobile) {
+      requestMicPermission();
+    }
   }, [requestMicPermission]);
 
   const handleLogin = useCallback(async (e: React.FormEvent) => {
@@ -298,6 +339,29 @@ const VoiceAssistant = () => {
       return;
     }
 
+    // Добавленные новые команды
+    if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
+      const teamNumberMatch = normalizedCommand.match(/команда\s+(\d+)/i);
+      if (teamNumberMatch) {
+        const teamNumber = parseInt(teamNumberMatch[1]);
+        const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
+        if (teamToUpdate) {
+          await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
+          setText(`Очки команды ${teamNumber} сброшены`);
+        }
+      }
+      return;
+    }
+
+    if (normalizedCommand.includes('удалить команду') && normalizedCommand.match(/\d+/)) {
+      const matchResult = normalizedCommand.match(/\d+/);
+      if (matchResult) {
+        const teamNumber = parseInt(matchResult[0]);
+        setText(`Для удаления команды ${teamNumber} подтвердите действие в интерфейсе`);
+        return;
+      }
+    }
+
     setText(`Не распознано: "${normalizedCommand}"`);
   }, [currentUser, teams, isListening, updateTeamPoints]);
 
@@ -416,23 +480,27 @@ const VoiceAssistant = () => {
   }, []);
 
   const handleMicClick = useCallback(async () => {
-    if (!micPermissionGranted) {
+    // На мобильных устройствах нужно явное пользовательское действие
+    if (micStatus === 'idle') {
+      setMicStatus('requested');
       try {
-        await requestMicPermission();
-        if (!micPermissionGranted) {
-          setErrorMessage("Не удалось получить доступ к микрофону");
-          setTimeout(() => setErrorMessage(''), 3000);
-          return;
-        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        setMicStatus('granted');
+        setMicPermissionGranted(true);
+        setIsListening(true); // Только после разрешения
       } catch (error) {
-        setErrorMessage("Ошибка доступа к микрофону");
-        setTimeout(() => setErrorMessage(''), 3000);
-        return;
+        console.error('Microphone access denied:', error);
+        setMicStatus('denied');
+        setMicPermissionGranted(false);
+        setIsListening(false);
+        setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
+        setTimeout(() => setErrorMessage(''), 5000);
       }
+    } else if (micStatus === 'granted') {
+      setIsListening(prev => !prev);
     }
-
-    setIsListening(prev => !prev);
-  }, [micPermissionGranted, requestMicPermission]);
+  }, [micStatus]);
 
   const handleTeamCountChange = useCallback((value: number) => {
     setTeamCount(Math.max(1, Math.min(10, value)));
@@ -466,6 +534,11 @@ const VoiceAssistant = () => {
         <h2>Не поддерживается</h2>
         <p>Ваш браузер не поддерживает голосовое управление.</p>
         <p>Попробуйте Google Chrome или Microsoft Edge.</p>
+        {errorMessage && (
+          <div className="message error">
+            {errorMessage}
+          </div>
+        )}
       </div>
     );
   }
@@ -644,7 +717,7 @@ const VoiceAssistant = () => {
                 ref={buttonRef}
                 onClick={handleMicClick}
                 className={`mic-button ${isListening ? 'listening' : ''}`}
-                disabled={!micPermissionGranted || isProcessing}
+                disabled={micStatus === 'denied' || isProcessing}
               >
                 <svg viewBox="0 0 24 24" className="mic-icon">
                   <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
@@ -652,8 +725,10 @@ const VoiceAssistant = () => {
               </button>
               
               <div className="mic-status">
-                {!micPermissionGranted ? (
-                  <span className="warning">Разрешите доступ к микрофону</span>
+                {micStatus === 'denied' ? (
+                  <span className="warning">Доступ к микрофону запрещен</span>
+                ) : micStatus === 'requested' ? (
+                  <span className="info">Разрешите доступ к микрофону...</span>
                 ) : isListening ? (
                   <span className="active">Слушаю...</span>
                 ) : (
