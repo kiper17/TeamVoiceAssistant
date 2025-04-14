@@ -3,13 +3,12 @@ import {
   collection, doc, updateDoc, 
   getDocs, deleteDoc, onSnapshot, 
   increment, writeBatch, query, where,
-  setDoc, getDoc, runTransaction
+  setDoc, getDoc
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import './VoiceAssistant.css';
 
-// Типы данных
 type Team = {
   id: string;
   name: string;
@@ -27,7 +26,6 @@ type User = {
 };
 
 const VoiceAssistant = () => {
-  // Состояния приложения
   const [isListening, setIsListening] = useState(false);
   const [text, setText] = useState('');
   const [isSupported, setIsSupported] = useState(true);
@@ -45,27 +43,10 @@ const VoiceAssistant = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // Рефы
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
 
-  // Проверка подключения к интернету
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Настройка темы
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
@@ -78,8 +59,8 @@ const VoiceAssistant = () => {
     document.body.className = isDarkMode ? 'dark-mode' : '';
   }, [isDarkMode]);
 
-  // Инициализация распознавания речи
   useEffect(() => {
+    // Проверка поддержки браузера с учетом мобильных устройств
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isChrome = /Chrome/i.test(navigator.userAgent);
     const isSafari = /Safari/i.test(navigator.userAgent);
@@ -89,6 +70,7 @@ const VoiceAssistant = () => {
       return;
     }
 
+    // Дополнительные проверки для мобильных устройств
     if (isMobile) {
       if (!isChrome && !isSafari) {
         setIsSupported(false);
@@ -112,17 +94,11 @@ const VoiceAssistant = () => {
     recognitionRef.current.continuous = true;
     recognitionRef.current.maxAlternatives = 3;
 
-    recognitionRef.current.onstart = () => {
-      console.log('Начало распознавания речи');
-      setText('Говорите...');
-    };
-
     recognitionRef.current.onresult = (event: any) => {
       const results = event.results;
       const last = results[results.length - 1];
       const transcript = last[0].transcript.trim();
       
-      console.log('Распознанный текст:', transcript);
       setText(transcript);
       handleVoiceCommand(transcript);
     };
@@ -132,36 +108,35 @@ const VoiceAssistant = () => {
       if (event.error === 'not-allowed') {
         setMicPermissionGranted(false);
         setMicStatus('denied');
-        setIsListening(false);
-      } else if (event.error === 'no-speech') {
-        setText('Речь не распознана. Попробуйте еще раз.');
-      } else if (event.error === 'audio-capture') {
-        setText('Не удалось получить доступ к микрофону.');
       }
+      setIsListening(false);
     };
 
     recognitionRef.current.onend = () => {
       if (isListening) {
-        try {
-          recognitionRef.current?.start();
-        } catch (error) {
-          console.error('Ошибка перезапуска распознавания:', error);
-          setIsListening(false);
-        }
+        recognitionRef.current?.start();
       }
     };
+
+    // Обработка потери фокуса на мобильных устройствах
+    const handleBlur = () => {
+      if (isListening) {
+        setIsListening(false);
+        setText('Микрофон выключен из-за переключения вкладки');
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
 
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      window.removeEventListener('blur', handleBlur);
     };
   }, [isListening]);
 
-  // Запрос разрешения на использование микрофона
   const requestMicPermission = useCallback(async () => {
-    if (micStatus === 'granted') return;
-    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
@@ -171,19 +146,17 @@ const VoiceAssistant = () => {
       console.error('Доступ к микрофону отклонен:', error);
       setMicPermissionGranted(false);
       setMicStatus('denied');
-      setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
-      setTimeout(() => setErrorMessage(''), 5000);
     }
-  }, [micStatus]);
+  }, []);
 
   useEffect(() => {
+    // На мобильных устройствах не запрашиваем разрешение автоматически
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (!isMobile) {
       requestMicPermission();
     }
   }, [requestMicPermission]);
 
-  // Авторизация пользователя
   const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
@@ -209,7 +182,6 @@ const VoiceAssistant = () => {
     }
   }, [username]);
 
-  // Выход из системы
   const handleLogout = useCallback(async () => {
     try {
       await signOut(auth);
@@ -228,7 +200,6 @@ const VoiceAssistant = () => {
     }
   }, [isListening]);
 
-  // Проверка сохраненного пользователя
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
@@ -242,7 +213,6 @@ const VoiceAssistant = () => {
     }
   }, []);
 
-  // Подписка на данные команд
   useEffect(() => {
     if (!currentUser) return;
 
@@ -252,20 +222,16 @@ const VoiceAssistant = () => {
     );
 
     const unsubscribe = onSnapshot(teamsQuery, (snapshot) => {
-      const loadedTeams = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name,
-          members: data.members,
-          points: data.points || 0,
-          expanded: false,
-          ownerId: data.ownerId,
-          createdAt: data.createdAt,
-          lastAccessed: data.lastAccessed
-        };
-      }).sort((a, b) => b.points - a.points);
-      
+      const loadedTeams = snapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name,
+        members: doc.data().members,
+        points: doc.data().points,
+        expanded: false,
+        ownerId: doc.data().ownerId,
+        createdAt: doc.data().createdAt,
+        lastAccessed: doc.data().lastAccessed
+      }));
       setTeams(loadedTeams);
     }, (error) => {
       console.error("Ошибка подписки на команды:", error);
@@ -276,41 +242,47 @@ const VoiceAssistant = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Обновление очков команды
-  const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
-    if (!currentUser || isProcessing || !isOnline) {
-      setErrorMessage(isOnline ? 'Идет обработка...' : 'Нет подключения к интернету');
-      setTimeout(() => setErrorMessage(''), 3000);
-      return;
+  useEffect(() => {
+    if (!micPermissionGranted || !currentUser) return;
+
+    if (isListening) {
+      try {
+        recognitionRef.current?.start();
+        setText('Говорите...');
+      } catch (error) {
+        console.error('Ошибка запуска распознавания:', error);
+        setIsListening(false);
+      }
+    } else {
+      recognitionRef.current?.stop();
     }
+
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, [isListening, micPermissionGranted, currentUser]);
+
+  const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
+    if (!currentUser || isProcessing) return;
 
     setIsProcessing(true);
     try {
       const teamRef = doc(db, 'teams', teamId);
+      const teamSnap = await getDoc(teamRef);
       
-      await runTransaction(db, async (transaction) => {
-        const teamDoc = await transaction.get(teamRef);
-        if (!teamDoc.exists()) {
-          throw new Error('Команда не найдена');
-        }
+      if (!teamSnap.exists()) {
+        throw new Error('Команда не найдена');
+      }
 
-        const currentPoints = teamDoc.data().points || 0;
-        const newPoints = currentPoints + delta;
-        
-        transaction.update(teamRef, {
-          points: newPoints,
-          lastAccessed: new Date().toISOString()
-        });
+      const teamData = teamSnap.data();
+      if (teamData.ownerId !== currentUser.id) {
+        throw new Error('Нет прав для изменения этой команды');
+      }
+
+      await updateDoc(teamRef, {
+        points: increment(delta),
+        lastAccessed: new Date().toISOString()
       });
-
-      setTeams(prevTeams => 
-        prevTeams.map(team => 
-          team.id === teamId 
-            ? { ...team, points: team.points + delta }
-            : team
-        ).sort((a, b) => b.points - a.points)
-      );
-
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
       setErrorMessage(error instanceof Error ? error.message : "Не удалось изменить очки");
@@ -318,19 +290,13 @@ const VoiceAssistant = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [currentUser, isProcessing, isOnline]);
+  }, [currentUser, isProcessing]);
 
-  // Обработка голосовых команд
   const handleVoiceCommand = useCallback(async (command: string) => {
-    if (!currentUser || teams.length === 0) {
-      console.log('Нет пользователя или команд:', { currentUser, teamsLength: teams.length });
-      return;
-    }
+    if (!currentUser || teams.length === 0) return;
 
     const normalizedCommand = command.toLowerCase().trim();
-    console.log('Обработка команды:', normalizedCommand);
-
-    // Базовые команды управления
+    
     if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
       setIsListening(false);
       setText('Микрофон выключен');
@@ -345,25 +311,26 @@ const VoiceAssistant = () => {
       return;
     }
 
-    // Простой паттерн для команд с очками
-    const simplePattern = /команд[аеу]\s*(\d+)\s*(?:плюс|\+)\s*(\d+)/i;
-    const minusPattern = /команд[аеу]\s*(\d+)\s*(?:минус|\-)\s*(\d+)/i;
+    const pointsMatch = normalizedCommand.match(
+      /(команда|команде|команду)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
+    );
 
-    console.log('Проверка паттернов на команде:', normalizedCommand);
-
-    let match = normalizedCommand.match(simplePattern);
-    if (match) {
-      const teamNumber = parseInt(match[1]);
-      const points = parseInt(match[2]);
-      console.log('Найдено добавление очков:', { teamNumber, points });
+    if (pointsMatch) {
+      const teamNumber = parseInt(pointsMatch[2]);
+      const operator = pointsMatch[3].toLowerCase();
+      let points = parseInt(pointsMatch[4]) || 1;
+      
+      if (operator.includes('минус') || operator === '-' || operator.includes('убрать') || operator.includes('снять')) {
+        points = -points;
+      }
       
       const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
+      
       if (teamToUpdate) {
         try {
           await updateTeamPoints(teamToUpdate.id, points);
-          setText(`Добавлено ${points} очков команде ${teamNumber}`);
+          setText(`Команда ${teamNumber}: ${points > 0 ? '+' : ''}${points} очков`);
         } catch (error) {
-          console.error('Ошибка добавления очков:', error);
           setText(`Ошибка изменения очков команды ${teamNumber}`);
         }
       } else {
@@ -372,99 +339,32 @@ const VoiceAssistant = () => {
       return;
     }
 
-    match = normalizedCommand.match(minusPattern);
-    if (match) {
-      const teamNumber = parseInt(match[1]);
-      const points = -parseInt(match[2]);
-      console.log('Найдено вычитание очков:', { teamNumber, points });
-      
-      const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
-      if (teamToUpdate) {
-        try {
-          await updateTeamPoints(teamToUpdate.id, points);
-          setText(`Убрано ${Math.abs(points)} очков у команды ${teamNumber}`);
-        } catch (error) {
-          console.error('Ошибка вычитания очков:', error);
-          setText(`Ошибка изменения очков команды ${teamNumber}`);
-        }
-      } else {
-        setText(`Команда ${teamNumber} не найдена`);
-      }
-      return;
-    }
-
-    // Команда сброса очков
+    // Добавленные новые команды
     if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
-      const teamMatch = normalizedCommand.match(/команд[аеу]\s*(\d+)/i);
-      if (teamMatch) {
-        const teamNumber = parseInt(teamMatch[1]);
+      const teamNumberMatch = normalizedCommand.match(/команда\s+(\d+)/i);
+      if (teamNumberMatch) {
+        const teamNumber = parseInt(teamNumberMatch[1]);
         const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
         if (teamToUpdate) {
-          try {
-            await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
-            setText(`Очки команды ${teamNumber} сброшены`);
-          } catch (error) {
-            setText(`Ошибка сброса очков команды ${teamNumber}`);
-          }
+          await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
+          setText(`Очки команды ${teamNumber} сброшены`);
         }
       }
       return;
     }
 
-    console.log('Команда не распознана');
+    if (normalizedCommand.includes('удалить команду') && normalizedCommand.match(/\d+/)) {
+      const matchResult = normalizedCommand.match(/\d+/);
+      if (matchResult) {
+        const teamNumber = parseInt(matchResult[0]);
+        setText(`Для удаления команды ${teamNumber} подтвердите действие в интерфейсе`);
+        return;
+      }
+    }
+
     setText(`Не распознано: "${normalizedCommand}"`);
-  }, [currentUser, teams, isListening, updateTeamPoints, setText]);
+  }, [currentUser, teams, isListening, updateTeamPoints]);
 
-  // Управление микрофоном
-  useEffect(() => {
-    if (!micPermissionGranted || !currentUser) return;
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsSupported(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ru-RU';
-    recognition.interimResults = false;
-    recognition.continuous = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      console.log('Начало распознавания речи');
-      setText('Говорите...');
-    };
-
-    recognition.onresult = (event) => {
-      console.log('Получен результат распознавания:', event);
-      const transcript = event.results[event.results.length - 1][0].transcript;
-      console.log('Распознанный текст:', transcript);
-      setText(transcript);
-      handleVoiceCommand(transcript);
-    };
-
-    recognition.onerror = (event) => {
-      console.error('Ошибка распознавания:', event.error);
-      if (event.error === 'no-speech' && isListening) {
-        recognition.start();
-      }
-    };
-
-    if (isListening) {
-      try {
-        recognition.start();
-      } catch (error) {
-        console.error('Ошибка запуска распознавания:', error);
-      }
-    }
-
-    return () => {
-      recognition.stop();
-    };
-  }, [isListening, micPermissionGranted, currentUser, handleVoiceCommand, setText]);
-
-  // Создание команд
   const createTeams = useCallback(async () => {
     if (!currentUser) {
       setErrorMessage("Требуется авторизация");
@@ -538,7 +438,6 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, teamCount, peopleCount]);
 
-  // Очистка неактивных команд
   const cleanupInactiveTeams = useCallback(async (inactiveDays = 7) => {
     if (!currentUser) return;
 
@@ -572,7 +471,6 @@ const VoiceAssistant = () => {
     }
   }, [currentUser]);
 
-  // Переключение отображения деталей команды
   const toggleTeamExpansion = useCallback((teamId: string) => {
     setTeams(prevTeams => 
       prevTeams.map(team => 
@@ -581,49 +479,37 @@ const VoiceAssistant = () => {
     );
   }, []);
 
-  // Управление микрофоном
   const handleMicClick = useCallback(async () => {
-    if (micStatus === 'denied') {
-      setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
-      setTimeout(() => setErrorMessage(''), 5000);
-      return;
-    }
-
-    if (micStatus === 'idle' || micStatus === 'requested') {
+    // На мобильных устройствах нужно явное пользовательское действие
+    if (micStatus === 'idle') {
       setMicStatus('requested');
-      await requestMicPermission();
-      return;
-    }
-
-    if (micStatus === 'granted') {
-      if (!isListening) {
-        try {
-          recognitionRef.current?.start();
-          setIsListening(true);
-        } catch (error) {
-          console.error('Ошибка запуска распознавания:', error);
-          setErrorMessage('Не удалось запустить распознавание речи');
-          setTimeout(() => setErrorMessage(''), 5000);
-        }
-      } else {
-        recognitionRef.current?.stop();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        setMicStatus('granted');
+        setMicPermissionGranted(true);
+        setIsListening(true); // Только после разрешения
+      } catch (error) {
+        console.error('Microphone access denied:', error);
+        setMicStatus('denied');
+        setMicPermissionGranted(false);
         setIsListening(false);
-        setText('Микрофон выключен');
+        setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
+        setTimeout(() => setErrorMessage(''), 5000);
       }
+    } else if (micStatus === 'granted') {
+      setIsListening(prev => !prev);
     }
-  }, [micStatus, isListening, requestMicPermission]);
+  }, [micStatus]);
 
-  // Изменение количества команд
   const handleTeamCountChange = useCallback((value: number) => {
     setTeamCount(Math.max(1, Math.min(10, value)));
   }, []);
 
-  // Изменение количества участников
   const handlePeopleCountChange = useCallback((value: number) => {
     setPeopleCount(Math.max(1, Math.min(100, value)));
   }, []);
 
-  // Компонент меню настроек
   const SettingsMenu = () => (
     <div className={`settings-menu ${showSettings ? 'visible' : ''}`}>
       <div className="settings-item" onClick={() => {
@@ -642,7 +528,6 @@ const VoiceAssistant = () => {
     </div>
   );
 
-  // Проверка поддержки браузера
   if (!isSupported) {
     return (
       <div className="browser-warning">
@@ -658,7 +543,6 @@ const VoiceAssistant = () => {
     );
   }
 
-  // Форма авторизации
   if (showAuthForm) {
     return (
       <div className="auth-container">
@@ -680,10 +564,8 @@ const VoiceAssistant = () => {
     );
   }
 
-  // Основной интерфейс приложения
   return (
     <div className={`voice-assistant-container ${isDarkMode ? 'dark-mode' : ''}`}>
-      {/* Уведомления */}
       {successMessage && (
         <div className="message success">
           {successMessage}
@@ -697,7 +579,6 @@ const VoiceAssistant = () => {
         </div>
       )}
 
-      {/* Шапка приложения */}
       <header className="app-header">
         <div className="user-info-container">
           <div className="user-info">
@@ -723,9 +604,7 @@ const VoiceAssistant = () => {
         <SettingsMenu />
       </header>
 
-      {/* Основное содержимое */}
       <main className="app-main">
-        {/* Секция команд */}
         <div className="teams-section">
           <div className="section-header">
             <h2>Управление командами</h2>
@@ -746,77 +625,71 @@ const VoiceAssistant = () => {
             >
               Очистить неактивные
             </button>
-            {/* Тестовая кнопка для отладки */}
-            <button 
-              onClick={() => teams.length > 0 && updateTeamPoints(teams[0].id, 1)}
-              disabled={!teams.length || isProcessing}
-              className="test-button"
-            >
-              Тест: +1 очко
-            </button>
           </div>
 
           {teams.length > 0 ? (
             <div className="teams-list">
-              {teams.map((team) => (
-                <div key={team.id} className={`team-card ${team.expanded ? 'expanded' : ''}`}>
-                  <div 
-                    className="team-header"
-                    onClick={() => toggleTeamExpansion(team.id)}
-                  >
-                    <div className="team-info">
-                      <span className="team-name">{team.name}</span>
-                      <span className="team-points">{team.points} очков</span>
+              {[...teams]
+                .sort((a, b) => b.points - a.points)
+                .map((team) => (
+                  <div key={team.id} className={`team-card ${team.expanded ? 'expanded' : ''}`}>
+                    <div 
+                      className="team-header"
+                      onClick={() => toggleTeamExpansion(team.id)}
+                    >
+                      <div className="team-info">
+                        <span className="team-name">{team.name}</span>
+                        <span className="team-points">{team.points} очков</span>
+                      </div>
+                      <div className="team-actions">
+                        <button
+                          className="points-button minus"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateTeamPoints(team.id, -1);
+                          }}
+                          disabled={isProcessing}
+                        >
+                          -1
+                        </button>
+                        <button
+                          className="points-button plus"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateTeamPoints(team.id, 1);
+                          }}
+                          disabled={isProcessing}
+                        >
+                          +1
+                        </button>
+                        <span className="expand-icon">
+                          {team.expanded ? '▲' : '▼'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="team-actions">
-                      <button
-                        className="points-button minus"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateTeamPoints(team.id, -1);
-                        }}
-                        disabled={isProcessing}
-                      >
-                        -1
-                      </button>
-                      <button
-                        className="points-button plus"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateTeamPoints(team.id, 1);
-                        }}
-                        disabled={isProcessing}
-                      >
-                        +1
-                      </button>
-                      <span className="expand-icon">
-                        {team.expanded ? '▲' : '▼'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {team.expanded && (
-                    <div className="team-details">
-                      <div className="team-members">
-                        <h4>Участники:</h4>
-                        <div className="members-list">
-                          {team.members.map((member) => (
-                            <span key={member} className="member-badge">
-                              {member}
-                            </span>
-                          ))}
+                    
+                    {team.expanded && (
+                      <div className="team-details">
+                        <div className="team-members">
+                          <h4>Участники:</h4>
+                          <div className="members-list">
+                            {team.members.map((member) => (
+                              <span key={member} className="member-badge">
+                                {member}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="team-metadata">
+                          <span>Создана: {new Date(team.createdAt || '').toLocaleString()}</span>
+                          {team.lastAccessed && (
+                            <span>Последняя активность: {new Date(team.lastAccessed).toLocaleString()}</span>
+                          )}
                         </div>
                       </div>
-                      <div className="team-metadata">
-                        <span>Создана: {new Date(team.createdAt || '').toLocaleString()}</span>
-                        {team.lastAccessed && (
-                          <span>Последняя активность: {new Date(team.lastAccessed).toLocaleString()}</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                ))}
             </div>
           ) : (
             <div className="empty-state">
@@ -835,7 +708,6 @@ const VoiceAssistant = () => {
           )}
         </div>
 
-        {/* Секция голосового управления */}
         <div className="voice-control-section">
           <div className="voice-control-card">
             <h3>Голосовое управление</h3>
@@ -875,7 +747,6 @@ const VoiceAssistant = () => {
         </div>
       </main>
 
-      {/* Модальное окно создания команд */}
       {showTeamCreator && (
         <div className="modal-overlay">
           <div className="team-creator-modal">
