@@ -5,9 +5,10 @@ import {
   increment, writeBatch, query, where,
   setDoc, getDoc
 } from 'firebase/firestore';
-import { getAuth, signInAnonymously, signOut } from 'firebase/auth';
+import { getAuth, signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import './VoiceAssistant.css';
+import InstructionModal from './InstructionModal';
 
 type Team = {
   id: string;
@@ -43,6 +44,8 @@ const VoiceAssistant = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showInstruction, setShowInstruction] = useState(false);
+  const [hasSeenInstruction, setHasSeenInstruction] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -528,6 +531,28 @@ const VoiceAssistant = () => {
     </div>
   );
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const appUser: User = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || 'Анонимный пользователь'
+        };
+        setCurrentUser(appUser);
+        setShowAuthForm(false);
+        if (!hasSeenInstruction) {
+          setShowInstruction(true);
+          setHasSeenInstruction(true);
+        }
+      } else {
+        setCurrentUser(null);
+        setShowAuthForm(true);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [hasSeenInstruction]);
+
   if (!isSupported) {
     return (
       <div className="browser-warning">
@@ -833,6 +858,10 @@ const VoiceAssistant = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showInstruction && (
+        <InstructionModal onClose={() => setShowInstruction(false)} />
       )}
     </div>
   );

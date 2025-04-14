@@ -173,42 +173,76 @@ body {
 
 .create-teams-button, 
 .cleanup-button {
-  padding: 8px 15px;
-  font-size: 0.9rem;
+  padding: 12px 24px;
+  font-size: 0.95rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 10px;
   border: none;
-  border-radius: 4px;
+  border-radius: 50px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
 }
 
 .create-teams-button {
-  background-color: #4CAF50;
+  background: #1976D2;
   color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
 }
 
 .create-teams-button:hover {
-  background-color: #388E3C;
-  transform: translateY(-1px);
+  background: #1565C0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+}
+
+.create-teams-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
 }
 
 .cleanup-button {
-  background-color: #ff9800;
+  background: #1976D2;
   color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
 }
 
 .cleanup-button:hover {
-  background-color: #f57c00;
-  transform: translateY(-1px);
+  background: #1565C0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+}
+
+.cleanup-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
 }
 
 .create-teams-button:disabled,
 .cleanup-button:disabled {
-  background-color: #cccccc;
+  background: linear-gradient(135deg, #B0BEC5 0%, #90A4AE 100%);
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
+  opacity: 0.7;
 }
 
 /* Список команд */
@@ -261,36 +295,54 @@ body {
 .team-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .points-button {
   width: 40px;
-  height: 30px;
+  height: 40px;
   border: none;
-  border-radius: 4px;
-  font-weight: bold;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .points-button.plus {
-  background-color: #4CAF50;
+  background: #1976D2;
   color: white;
+}
+
+.points-button.plus:hover {
+  background: #1565C0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
 }
 
 .points-button.minus {
-  background-color: #f44336;
+  background: #FF5252;
   color: white;
 }
 
-.points-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+.points-button.minus:hover {
+  background: #F44336;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+}
+
+.points-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .points-button:disabled {
-  background-color: #cccccc;
+  background: #E0E0E0;
+  color: #9E9E9E;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -421,35 +473,30 @@ body {
 .mic-button {
   width: 80px;
   height: 80px;
-  border-radius: 50%;
+  border-radius: 24px;
   border: none;
   background-color: #f5f5f5;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .mic-button.listening {
-  background-color: #ffcdd2;
-  animation: pulse 1.5s infinite;
+  background: rgba(25, 118, 210, 0.2);
+  border: 2px solid #1976D2;
 }
 
 .mic-button:hover:not(:disabled) {
   transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .mic-button:disabled {
   background-color: #e0e0e0;
   cursor: not-allowed;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
 }
 
 .mic-icon {
@@ -468,7 +515,7 @@ body {
 }
 
 .active {
-  color: #4CAF50;
+  color: #2196F3;
   font-weight: bold;
 }
 
@@ -701,7 +748,7 @@ button.secondary-button:hover:not(:disabled) {
 }
 
 .message.success {
-  background-color: #4CAF50;
+  background-color: #2196F3;
   color: white;
 }
 
@@ -788,23 +835,37 @@ button.secondary-button:hover:not(:disabled) {
 
 /* Тёмная тема */
 .dark-mode {
-  background-color: #121212;
-  color: #e0e0e0;
+  background-color: #0A0A0F;
+  color: #C9D1D9;
 }
 
-.dark-mode .voice-assistant-container,
+.dark-mode .voice-assistant-container {
+  background-color: #0A0A0F;
+  color: #C9D1D9;
+  box-shadow: none;
+}
+
 .dark-mode .teams-section,
-.dark-mode .voice-control-section,
-.dark-mode .team-creator-modal,
+.dark-mode .voice-control-section {
+  background-color: #161B22;
+  color: #C9D1D9;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.dark-mode .team-creator-modal {
+  background-color: #161B22;
+  color: #C9D1D9;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
 .dark-mode .auth-form {
-  background-color: #1e1e1e;
-  color: #e0e0e0;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  background-color: #161B22;
+  color: #C9D1D9;
 }
 
 .dark-mode .user-info-container {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: #444;
+  background-color: rgba(255, 255, 255, 0.02);
+  border-color: #30363D;
 }
 
 .dark-mode .username,
@@ -813,66 +874,133 @@ button.secondary-button:hover:not(:disabled) {
 .dark-mode .team-members h4,
 .dark-mode .modal-header h3,
 .dark-mode .auth-form h2 {
-  color: #e0e0e0;
+  color: #8B949E;
 }
 
-.dark-mode .team-card,
-.dark-mode .voice-control-card,
-.dark-mode .output-text {
-  background-color: #2d2d2d;
-  border-color: #444;
+.dark-mode .team-card {
+  background-color: #21262D;
+  border-color: #30363D;
+}
+
+.dark-mode .team-header {
+  background-color: #21262D;
 }
 
 .dark-mode .team-details {
-  background-color: #252525;
+  background-color: #161B22;
+  border-color: #30363D;
 }
 
 .dark-mode .member-badge {
-  background-color: #3d3d3d;
+  background-color: #30363D;
+  color: #8B949E;
 }
 
 .dark-mode .empty-state {
-  background-color: #252525;
-  border-color: #444;
+  background-color: #161B22;
+  border-color: #30363D;
 }
 
 .dark-mode .empty-state p,
 .dark-mode .team-points,
 .dark-mode .team-metadata {
-  color: #aaa;
+  color: #8B949E;
+}
+
+.dark-mode .points-button.plus {
+  background: #0D47A1;
+  color: #C9D1D9;
+}
+
+.dark-mode .points-button.plus:hover {
+  background: #1565C0;
+}
+
+.dark-mode .points-button.minus {
+  background: #C62828;
+  color: #C9D1D9;
+}
+
+.dark-mode .points-button.minus:hover {
+  background: #D32F2F;
 }
 
 .dark-mode input,
 .dark-mode .number-input-group input {
-  background-color: #333;
-  color: #fff;
-  border-color: #555;
+  background-color: #0D1117;
+  color: #C9D1D9;
+  border-color: #30363D;
 }
 
-.dark-mode .settings-menu,
+.dark-mode .number-input-group {
+  background-color: #0D1117;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.dark-mode .settings-menu {
+  background-color: #161B22;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
 .dark-mode .settings-item:hover {
-  background-color: #2d2d2d;
+  background-color: #21262D;
 }
 
 .dark-mode .settings-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
-.dark-mode .secondary-button {
-  background-color: #333;
-  color: #e0e0e0;
+.dark-mode button.secondary-button {
+  background-color: #21262D;
+  border-color: #30363D;
+  color: #C9D1D9;
 }
 
-.dark-mode .secondary-button:hover {
-  background-color: #3d3d3d;
+.dark-mode button.secondary-button:hover {
+  background-color: #30363D;
 }
 
 .dark-mode .close-button {
-  color: #aaa;
+  color: #8B949E;
 }
 
 .dark-mode .close-button:hover {
-  color: #e0e0e0;
+  background-color: rgba(139, 148, 158, 0.1);
+  color: #C9D1D9;
+}
+
+.dark-mode .modal-header,
+.dark-mode .modal-footer {
+  border-color: #30363D;
+}
+
+.dark-mode .create-teams-button,
+.dark-mode .cleanup-button {
+  background: #0D47A1;
+  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.3);
+}
+
+.dark-mode .create-teams-button:hover,
+.dark-mode .cleanup-button:hover {
+  background: #1565C0;
+  box-shadow: 0 4px 12px rgba(13, 71, 161, 0.4);
+}
+
+.dark-mode .mic-button {
+  background-color: #21262D;
+}
+
+.dark-mode .mic-button.listening {
+  background-color: rgba(13, 71, 161, 0.2);
+}
+
+.dark-mode .output-text {
+  background-color: #0D1117;
+  border-color: #30363D;
+}
+
+.dark-mode .placeholder {
+  color: #8B949E;
 }
 
 /* Адаптация для мобильных устройств */
@@ -905,7 +1033,8 @@ button.secondary-button:hover:not(:disabled) {
   .create-teams-button,
   .cleanup-button {
     width: 100%;
-    justify-content: center;
+    padding: 14px 20px;
+    font-size: 1rem;
   }
 
   .team-header {
@@ -955,6 +1084,12 @@ button.secondary-button:hover:not(:disabled) {
   .secondary-button,
   .primary-button {
     width: 100%;
+  }
+
+  .points-button {
+    width: 44px;
+    height: 34px;
+    font-size: 18px;
   }
 }
 
