@@ -59,9 +59,13 @@ h2 {
 }
 
 .number-input {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  background: #f5f5f5;
+  border-radius: 12px;
+  padding: 8px;
 }
 
 .number-input button {
@@ -87,9 +91,10 @@ h2 {
 
 .number-input span {
   min-width: 40px;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 500;
   color: #333;
+  text-align: center;
 }
 
 .modal-buttons {
