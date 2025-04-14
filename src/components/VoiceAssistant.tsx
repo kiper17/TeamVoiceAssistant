@@ -43,6 +43,7 @@ const VoiceAssistant = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -287,6 +288,10 @@ const VoiceAssistant = () => {
 
   const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
     if (!currentUser || isProcessing) return;
+    if (!isOnline) {
+      setErrorMessage('Невозможно обновить очки: нет подключения к интернету');
+      return;
+    }
 
     console.log('Начало обновления очков:', { teamId, delta }); // Отладка
 
@@ -325,11 +330,16 @@ const VoiceAssistant = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [currentUser, isProcessing]);
+  }, [currentUser, isProcessing, isOnline]);
 
   const handleVoiceCommand = useCallback(async (command: string) => {
     if (!currentUser || teams.length === 0) {
       console.log('Нет пользователя или команд:', { currentUser, teamsLength: teams.length });
+      return;
+    }
+
+    if (!isOnline) {
+      setText('Невозможно выполнить команду: нет подключения к интернету');
       return;
     }
 
@@ -384,7 +394,7 @@ const VoiceAssistant = () => {
     }
 
     setText(`Не распознано: "${normalizedCommand}"`);
-  }, [currentUser, teams, isListening, updateTeamPoints]);
+  }, [currentUser, teams, isListening, updateTeamPoints, isOnline]);
 
   const createTeams = useCallback(async () => {
     if (!currentUser) {
@@ -557,6 +567,28 @@ const VoiceAssistant = () => {
     </div>
   );
 
+  // Добавляем отслеживание онлайн-статуса
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setSuccessMessage('Подключение к интернету восстановлено');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      setErrorMessage('Отсутствует подключение к интернету');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   if (!isSupported) {
     return (
       <div className="browser-warning">
@@ -595,6 +627,11 @@ const VoiceAssistant = () => {
 
   return (
     <div className={`voice-assistant-container ${isDarkMode ? 'dark-mode' : ''}`}>
+      {!isOnline && (
+        <div className="message error offline-message">
+          Отсутствует подключение к интернету. Некоторые функции могут быть недоступны.
+        </div>
+      )}
       {successMessage && (
         <div className="message success">
           {successMessage}
@@ -602,9 +639,7 @@ const VoiceAssistant = () => {
       )}
       {errorMessage && (
         <div className="message error">
-          {errorMessage.split('\n').map((line, i) => (
-            <div key={i}>{line}</div>
-          ))}
+          {errorMessage}
         </div>
       )}
 
