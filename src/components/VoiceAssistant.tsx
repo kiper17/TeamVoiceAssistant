@@ -285,10 +285,23 @@ const VoiceAssistant = () => {
         throw new Error('Нет прав для изменения этой команды');
       }
 
+      const currentPoints = teamData.points || 0;
+      const newPoints = currentPoints + delta;
+
       await updateDoc(teamRef, {
-        points: increment(delta),
+        points: newPoints,
         lastAccessed: new Date().toISOString()
       });
+
+      // Обновляем локальное состояние
+      setTeams(prevTeams => 
+        prevTeams.map(team => 
+          team.id === teamId 
+            ? { ...team, points: newPoints }
+            : team
+        )
+      );
+
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
       setErrorMessage(error instanceof Error ? error.message : "Не удалось изменить очки");
