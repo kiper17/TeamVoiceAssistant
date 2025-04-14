@@ -350,23 +350,24 @@ const VoiceAssistant = () => {
       return;
     }
 
-    // Простое регулярное выражение для команд
-    const simpleMatch = normalizedCommand.match(/команд[аеу]\s*(\d+)\s*([\+\-]|плюс|минус|дать|добавить|убрать|снять)\s*(\d+)?/i);
-    console.log('Результат простого match:', simpleMatch);
-
-    if (simpleMatch) {
-      const teamNumber = parseInt(simpleMatch[1]);
-      const operator = simpleMatch[2].toLowerCase();
-      let points = parseInt(simpleMatch[3]) || 1;
-
-      console.log('Разбор команды:', { teamNumber, operator, points });
-
-      if (operator === '-' || operator.includes('минус') || operator.includes('убрать') || operator.includes('снять')) {
+    // Используем паттерн из предыдущей рабочей версии
+    const commandPattern = /команда\s+(\d+)\s+(плюс|минус|\+|\-)\s*(\d+)/i;
+    const match = normalizedCommand.match(commandPattern);
+    console.log('Результат разбора команды:', match);
+    
+    if (match) {
+      const teamNumber = parseInt(match[1]);
+      const operator = match[2].toLowerCase();
+      let points = parseInt(match[3]);
+      
+      console.log('Параметры команды:', { teamNumber, operator, points });
+      
+      if (operator === 'минус' || operator === '-') {
         points = -points;
       }
       
       const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
-      console.log('Найдена команда для обновления:', teamToUpdate);
+      console.log('Найдена команда:', teamToUpdate);
       
       if (teamToUpdate) {
         try {
@@ -382,7 +383,6 @@ const VoiceAssistant = () => {
       return;
     }
 
-    console.log('Команда не распознана');
     setText(`Не распознано: "${normalizedCommand}"`);
   }, [currentUser, teams, isListening, updateTeamPoints]);
 
