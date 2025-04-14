@@ -287,65 +287,62 @@ const VoiceAssistant = () => {
   }, [isListening, micPermissionGranted, currentUser]);
 
   const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
-    if (!currentUser || isProcessing) return;
-    if (!isOnline) {
-      setErrorMessage('Невозможно обновить очки: нет подключения к интернету');
+    if (!currentUser || isProcessing) {
+      console.error('Обновление невозможно: нет пользователя или идет обработка');
       return;
     }
 
-    console.log('Начало обновления очков:', { teamId, delta }); // Отладка
+    console.log(`Обновление очков: команда ${teamId}, изменение ${delta}`);
 
     setIsProcessing(true);
     try {
       const teamRef = doc(db, 'teams', teamId);
       
-      // Обновляем в базе данных
-      await updateDoc(teamRef, {
-        points: increment(delta),
-        lastAccessed: new Date().toISOString()
+      // Используем транзакцию для надежности
+      await runTransaction(db, async (transaction) => {
+        const teamDoc = await transaction.get(teamRef);
+        if (!teamDoc.exists()) {
+          throw new Error('Команда не найдена');
+        }
+
+        const currentPoints = teamDoc.data().points || 0;
+        const newPoints = currentPoints + delta;
+        
+        transaction.update(teamRef, {
+          points: newPoints,
+          lastAccessed: new Date().toISOString()
+        });
       });
 
-      console.log('Очки успешно обновлены в БД'); // Отладка
-
-      // Получаем актуальные данные
-      const updatedSnap = await getDoc(teamRef);
-      if (updatedSnap.exists()) {
-        const updatedData = updatedSnap.data();
-        console.log('Получены обновленные данные:', updatedData); // Отладка
-
-        // Обновляем локальное состояние
-        setTeams(prevTeams => 
-          prevTeams.map(team => 
-            team.id === teamId 
-              ? { ...team, points: updatedData.points || 0 }
-              : team
-          ).sort((a, b) => b.points - a.points) // Сортируем по очкам
-        );
-      }
+      // Обновляем локальное состояние
+      setTeams(prevTeams => 
+        prevTeams.map(team => 
+          team.id === teamId 
+            ? { ...team, points: team.points + delta }
+            : team
+        ).sort((a, b) => b.points - a.points)
+      );
 
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
       setErrorMessage(error instanceof Error ? error.message : "Не удалось изменить очки");
       setTimeout(() => setErrorMessage(''), 3000);
+      throw error; // Пробрасываем ошибку дальше
     } finally {
       setIsProcessing(false);
     }
-  }, [currentUser, isProcessing, isOnline]);
+  }, [currentUser, isProcessing]);
 
   const handleVoiceCommand = useCallback(async (command: string) => {
     if (!currentUser || teams.length === 0) {
-      console.log('Нет пользователя или команд:', { currentUser, teamsLength: teams.length });
-      return;
-    }
-
-    if (!isOnline) {
-      setText('Невозможно выполнить команду: нет подключения к интернету');
+      console.error('Нет пользователя или команд для обработки команды');
       return;
     }
 
     const normalizedCommand = command.toLowerCase().trim();
     console.log('Обработка команды:', normalizedCommand);
-    
+
+    // Команды управления микрофоном
     if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
       setIsListening(false);
       setText('Микрофон выключен');
@@ -360,25 +357,26 @@ const VoiceAssistant = () => {
       return;
     }
 
-    // Используем паттерн из предыдущей рабочей версии
-    const commandPattern = /команда\s+(\d+)\s+(плюс|минус|\+|\-)\s*(\d+)/i;
-    const match = normalizedCommand.match(commandPattern);
-    console.log('Результат разбора команды:', match);
+    // Улучшенный regex для распознавания команд с очками
+    const pointsPattern = /(команда|команде|команду)\s*(\d+)\s*(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i;
+    const pointsMatch = normalizedCommand.match(pointsPattern);
     
-    if (match) {
-      const teamNumber = parseInt(match[1]);
-      const operator = match[2].toLowerCase();
-      let points = parseInt(match[3]);
+    if (pointsMatch) {
+      const teamNumber = parseInt(pointsMatch[2]);
+      const operator = pointsMatch[3].toLowerCase();
+      let points = pointsMatch[4] ? parseInt(pointsMatch[4]) : 1;
       
-      console.log('Параметры команды:', { teamNumber, operator, points });
-      
-      if (operator === 'минус' || operator === '-') {
-        points = -points;
+      if (operator.includes('минус') || operator === '-' || operator.includes('убрать') || operator.includes('снять')) {
+        points = -Math.abs(points); // Всегда отрицательное значение
       }
       
-      const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
-      console.log('Найдена команда:', teamToUpdate);
+      console.log(`Попытка изменить очки: Команда ${teamNumber}, ${points} очков`);
       
+      const teamToUpdate = teams.find(team => {
+        const teamNameNumber = team.name.replace('Команда ', '');
+        return parseInt(teamNameNumber) === teamNumber;
+      });
+
       if (teamToUpdate) {
         try {
           await updateTeamPoints(teamToUpdate.id, points);
@@ -388,13 +386,38 @@ const VoiceAssistant = () => {
           setText(`Ошибка изменения очков команды ${teamNumber}`);
         }
       } else {
+        console.error(`Команда ${teamNumber} не найдена`);
         setText(`Команда ${teamNumber} не найдена`);
       }
       return;
     }
 
+    // Дополнительные команды
+    if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
+      const teamMatch = normalizedCommand.match(/команда\s*(\d+)/i);
+      if (teamMatch) {
+        const teamNumber = parseInt(teamMatch[1]);
+        const teamToUpdate = teams.find(team => {
+          const teamNameNumber = team.name.replace('Команда ', '');
+          return parseInt(teamNameNumber) === teamNumber;
+        });
+        
+        if (teamToUpdate) {
+          try {
+            await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
+            setText(`Очки команды ${teamNumber} сброшены`);
+          } catch (error) {
+            console.error('Ошибка сброса очков:', error);
+            setText(`Ошибка сброса очков команды ${teamNumber}`);
+          }
+        }
+      }
+      return;
+    }
+
+    console.log('Команда не распознана:', normalizedCommand);
     setText(`Не распознано: "${normalizedCommand}"`);
-  }, [currentUser, teams, isListening, updateTeamPoints, isOnline]);
+  }, [currentUser, teams, isListening, updateTeamPoints]);
 
   const createTeams = useCallback(async () => {
     if (!currentUser) {
@@ -588,6 +611,22 @@ const VoiceAssistant = () => {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Добавляем тестовую кнопку для отладки
+  const renderDebugButton = () => {
+    if (process.env.NODE_ENV === 'development') {
+      return (
+        <button 
+          onClick={() => teams.length > 0 && updateTeamPoints(teams[0].id, 1)}
+          disabled={!teams.length || isProcessing}
+          className="debug-button"
+        >
+          Тест: +1 очко первой команде
+        </button>
+      );
+    }
+    return null;
+  };
 
   if (!isSupported) {
     return (
@@ -898,6 +937,7 @@ const VoiceAssistant = () => {
           </div>
         </div>
       )}
+      {renderDebugButton()}
     </div>
   );
 };
