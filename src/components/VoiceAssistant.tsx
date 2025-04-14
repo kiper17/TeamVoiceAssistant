@@ -232,7 +232,7 @@ const VoiceAssistant = () => {
         id: doc.id,
         name: doc.data().name,
         members: doc.data().members,
-        points: doc.data().points,
+        points: doc.data().points || 0,
         expanded: false,
         ownerId: doc.data().ownerId,
         createdAt: doc.data().createdAt,
@@ -288,12 +288,7 @@ const VoiceAssistant = () => {
       const currentPoints = teamData.points || 0;
       const newPoints = currentPoints + delta;
 
-      await updateDoc(teamRef, {
-        points: newPoints,
-        lastAccessed: new Date().toISOString()
-      });
-
-      // Обновляем локальное состояние
+      // Сначала обновляем локальное состояние для мгновенного отображения
       setTeams(prevTeams => 
         prevTeams.map(team => 
           team.id === teamId 
@@ -301,6 +296,25 @@ const VoiceAssistant = () => {
             : team
         )
       );
+
+      // Затем обновляем в базе данных
+      await updateDoc(teamRef, {
+        points: newPoints,
+        lastAccessed: new Date().toISOString()
+      });
+
+      // Ждем обновления из Firestore
+      const updatedSnap = await getDoc(teamRef);
+      if (updatedSnap.exists()) {
+        const updatedData = updatedSnap.data();
+        setTeams(prevTeams => 
+          prevTeams.map(team => 
+            team.id === teamId 
+              ? { ...team, points: updatedData.points }
+              : team
+          )
+        );
+      }
 
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
