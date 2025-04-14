@@ -371,14 +371,42 @@ const VoiceAssistant = () => {
       return;
     }
 
+    // Словарь для преобразования слов в числа
+    const numberWords: { [key: string]: number } = {
+      'один': 1, 'одно': 1, 'одна': 1,
+      'два': 2, 'две': 2,
+      'три': 3,
+      'четыре': 4,
+      'пять': 5,
+      'шесть': 6,
+      'семь': 7,
+      'восемь': 8,
+      'девять': 9,
+      'десять': 10
+    };
+
+    // Улучшенное регулярное выражение для распознавания команд
     const pointsMatch = normalizedCommand.match(
-      /(команда|команде|команду)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
+      /(команда|команде|команду)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(?:(\d+)|(?:(\w+)\s+(?:очк(?:а|ов|и)|балл(?:а|ов|и))))/i
     );
 
     if (pointsMatch) {
       const teamNumber = parseInt(pointsMatch[2]);
       const operator = pointsMatch[3].toLowerCase();
-      let points = parseInt(pointsMatch[4]) || 1;
+      let points = 0;
+
+      // Определяем количество очков
+      if (pointsMatch[4]) {
+        // Если указано число
+        points = parseInt(pointsMatch[4]);
+      } else if (pointsMatch[5]) {
+        // Если указано словом
+        const word = pointsMatch[5].toLowerCase();
+        points = numberWords[word] || 1;
+      } else {
+        // Если количество не указано, используем 1
+        points = 1;
+      }
       
       if (operator.includes('минус') || operator === '-' || operator.includes('убрать') || operator.includes('снять')) {
         points = -points;
