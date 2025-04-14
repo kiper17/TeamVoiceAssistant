@@ -3,7 +3,7 @@ import {
   collection, doc, updateDoc, 
   getDocs, deleteDoc, onSnapshot, 
   increment, writeBatch, query, where,
-  setDoc, getDoc
+  setDoc, getDoc, runTransaction
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
@@ -238,6 +238,10 @@ const VoiceAssistant = () => {
         createdAt: doc.data().createdAt,
         lastAccessed: doc.data().lastAccessed
       }));
+      
+      // Сортируем команды по очкам
+      loadedTeams.sort((a, b) => b.points - a.points);
+      
       setTeams(loadedTeams);
     }, (error) => {
       console.error("Ошибка подписки на команды:", error);
@@ -273,49 +277,36 @@ const VoiceAssistant = () => {
 
     setIsProcessing(true);
     try {
-      const teamRef = doc(db, 'teams', teamId);
-      const teamSnap = await getDoc(teamRef);
-      
-      if (!teamSnap.exists()) {
-        throw new Error('Команда не найдена');
-      }
+      await runTransaction(db, async (transaction) => {
+        const teamRef = doc(db, 'teams', teamId);
+        const teamSnap = await transaction.get(teamRef);
+        
+        if (!teamSnap.exists()) {
+          throw new Error('Команда не найдена');
+        }
 
-      const teamData = teamSnap.data();
-      if (teamData.ownerId !== currentUser.id) {
-        throw new Error('Нет прав для изменения этой команды');
-      }
+        const teamData = teamSnap.data();
+        if (teamData.ownerId !== currentUser.id) {
+          throw new Error('Нет прав для изменения этой команды');
+        }
 
-      const currentPoints = teamData.points || 0;
-      const newPoints = currentPoints + delta;
+        const currentPoints = teamData.points || 0;
+        const newPoints = currentPoints + delta;
 
-      // Сначала обновляем локальное состояние для мгновенного отображения
-      setTeams(prevTeams => 
-        prevTeams.map(team => 
-          team.id === teamId 
-            ? { ...team, points: newPoints }
-            : team
-        )
-      );
+        transaction.update(teamRef, {
+          points: newPoints,
+          lastAccessed: new Date().toISOString()
+        });
 
-      // Затем обновляем в базе данных
-      await updateDoc(teamRef, {
-        points: newPoints,
-        lastAccessed: new Date().toISOString()
-      });
-
-      // Ждем обновления из Firestore
-      const updatedSnap = await getDoc(teamRef);
-      if (updatedSnap.exists()) {
-        const updatedData = updatedSnap.data();
+        // Обновляем локальное состояние
         setTeams(prevTeams => 
           prevTeams.map(team => 
             team.id === teamId 
-              ? { ...team, points: updatedData.points }
+              ? { ...team, points: newPoints }
               : team
           )
         );
-      }
-
+      });
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
       setErrorMessage(error instanceof Error ? error.message : "Не удалось изменить очки");
