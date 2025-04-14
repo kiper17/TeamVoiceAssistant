@@ -367,7 +367,7 @@ const VoiceAssistant = () => {
     }
 
     // Улучшенное распознавание команд с очками
-    const pointsPattern = /(команда|команде|команду)\s*(\d+)\s*(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i;
+    const pointsPattern = /(команда|команде|команду)\s*(\d+)\s*(дать|добавить|убрать|снять|плюс|минус|\+|\-|)\s*(\d+)?/i;
     const pointsMatch = normalizedCommand.match(pointsPattern);
     
     if (pointsMatch) {
