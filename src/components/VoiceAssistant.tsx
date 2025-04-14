@@ -222,41 +222,35 @@ const VoiceAssistant = () => {
   useEffect(() => {
     if (!currentUser) return;
 
+    console.log('Настройка подписки на команды'); // Отладка
+
     const teamsQuery = query(
       collection(db, 'teams'),
       where('ownerId', '==', currentUser.id)
     );
 
     const unsubscribe = onSnapshot(teamsQuery, (snapshot) => {
-      const loadedTeams = snapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name,
-        members: doc.data().members,
-        points: doc.data().points || 0,
-        expanded: false,
-        ownerId: doc.data().ownerId,
-        createdAt: doc.data().createdAt,
-        lastAccessed: doc.data().lastAccessed
-      }));
+      console.log('Получено обновление команд'); // Отладка
+      
+      const loadedTeams = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('Данные команды:', doc.id, data); // Отладка
+        return {
+          id: doc.id,
+          name: data.name,
+          members: data.members,
+          points: data.points || 0,
+          expanded: false,
+          ownerId: data.ownerId,
+          createdAt: data.createdAt,
+          lastAccessed: data.lastAccessed
+        };
+      });
       
       // Сортируем команды по очкам
       loadedTeams.sort((a, b) => b.points - a.points);
       
-      // Для мобильных устройств добавляем дополнительную проверку
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      if (isMobile) {
-        // Проверяем, действительно ли нужно обновить состояние
-        setTeams(prevTeams => {
-          const hasChanges = prevTeams.some((prevTeam, index) => {
-            const newTeam = loadedTeams[index];
-            return !newTeam || prevTeam.points !== newTeam.points;
-          });
-          
-          return hasChanges ? loadedTeams : prevTeams;
-        });
-      } else {
-        setTeams(loadedTeams);
-      }
+      setTeams(loadedTeams);
     }, (error) => {
       console.error("Ошибка подписки на команды:", error);
       setErrorMessage("Ошибка загрузки команд");
@@ -289,58 +283,34 @@ const VoiceAssistant = () => {
   const updateTeamPoints = useCallback(async (teamId: string, delta: number) => {
     if (!currentUser || isProcessing) return;
 
+    console.log('Начало обновления очков:', { teamId, delta }); // Отладка
+
     setIsProcessing(true);
     try {
       const teamRef = doc(db, 'teams', teamId);
-      const teamSnap = await getDoc(teamRef);
       
-      if (!teamSnap.exists()) {
-        throw new Error('Команда не найдена');
-      }
-
-      const teamData = teamSnap.data();
-      if (teamData.ownerId !== currentUser.id) {
-        throw new Error('Нет прав для изменения этой команды');
-      }
-
-      const currentPoints = teamData.points || 0;
-      const newPoints = currentPoints + delta;
-
-      // Обновляем локальное состояние сразу для мгновенного отображения
-      setTeams(prevTeams => 
-        prevTeams.map(team => 
-          team.id === teamId 
-            ? { ...team, points: newPoints }
-            : team
-        )
-      );
-
       // Обновляем в базе данных
       await updateDoc(teamRef, {
-        points: newPoints,
+        points: increment(delta),
         lastAccessed: new Date().toISOString()
       });
 
-      // Для мобильных устройств делаем дополнительную проверку
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      if (isMobile) {
-        // Ждем небольшое время и проверяем актуальность данных
-        setTimeout(async () => {
-          const updatedSnap = await getDoc(teamRef);
-          if (updatedSnap.exists()) {
-            const updatedData = updatedSnap.data();
-            if (updatedData.points !== newPoints) {
-              // Если данные не совпадают, обновляем локальное состояние
-              setTeams(prevTeams => 
-                prevTeams.map(team => 
-                  team.id === teamId 
-                    ? { ...team, points: updatedData.points }
-                    : team
-                )
-              );
-            }
-          }
-        }, 500);
+      console.log('Очки успешно обновлены в БД'); // Отладка
+
+      // Получаем актуальные данные
+      const updatedSnap = await getDoc(teamRef);
+      if (updatedSnap.exists()) {
+        const updatedData = updatedSnap.data();
+        console.log('Получены обновленные данные:', updatedData); // Отладка
+
+        // Обновляем локальное состояние
+        setTeams(prevTeams => 
+          prevTeams.map(team => 
+            team.id === teamId 
+              ? { ...team, points: updatedData.points || 0 }
+              : team
+          ).sort((a, b) => b.points - a.points) // Сортируем по очкам
+        );
       }
 
     } catch (error) {
