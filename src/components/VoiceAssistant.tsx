@@ -94,6 +94,10 @@ const VoiceAssistant = () => {
     recognitionRef.current.continuous = true;
     recognitionRef.current.maxAlternatives = 3;
 
+    recognitionRef.current.onstart = () => {
+      setText('Говорите...');
+    };
+
     recognitionRef.current.onresult = (event: any) => {
       const results = event.results;
       const last = results[results.length - 1];
@@ -108,35 +112,35 @@ const VoiceAssistant = () => {
       if (event.error === 'not-allowed') {
         setMicPermissionGranted(false);
         setMicStatus('denied');
+        setIsListening(false);
+      } else if (event.error === 'no-speech') {
+        setText('Речь не распознана. Попробуйте еще раз.');
+      } else if (event.error === 'audio-capture') {
+        setText('Не удалось получить доступ к микрофону.');
       }
-      setIsListening(false);
     };
 
     recognitionRef.current.onend = () => {
       if (isListening) {
-        recognitionRef.current?.start();
+        try {
+          recognitionRef.current?.start();
+        } catch (error) {
+          console.error('Ошибка перезапуска распознавания:', error);
+          setIsListening(false);
+        }
       }
     };
-
-    // Обработка потери фокуса на мобильных устройствах
-    const handleBlur = () => {
-      if (isListening) {
-        setIsListening(false);
-        setText('Микрофон выключен из-за переключения вкладки');
-      }
-    };
-
-    window.addEventListener('blur', handleBlur);
 
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      window.removeEventListener('blur', handleBlur);
     };
-  }, [isListening]);
+  }, []);
 
   const requestMicPermission = useCallback(async () => {
+    if (micStatus === 'granted') return;
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
@@ -146,8 +150,10 @@ const VoiceAssistant = () => {
       console.error('Доступ к микрофону отклонен:', error);
       setMicPermissionGranted(false);
       setMicStatus('denied');
+      setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
+      setTimeout(() => setErrorMessage(''), 5000);
     }
-  }, []);
+  }, [micStatus]);
 
   useEffect(() => {
     // На мобильных устройствах не запрашиваем разрешение автоматически
@@ -480,27 +486,35 @@ const VoiceAssistant = () => {
   }, []);
 
   const handleMicClick = useCallback(async () => {
-    // На мобильных устройствах нужно явное пользовательское действие
-    if (micStatus === 'idle') {
-      setMicStatus('requested');
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        setMicStatus('granted');
-        setMicPermissionGranted(true);
-        setIsListening(true); // Только после разрешения
-      } catch (error) {
-        console.error('Microphone access denied:', error);
-        setMicStatus('denied');
-        setMicPermissionGranted(false);
-        setIsListening(false);
-        setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
-        setTimeout(() => setErrorMessage(''), 5000);
-      }
-    } else if (micStatus === 'granted') {
-      setIsListening(prev => !prev);
+    if (micStatus === 'denied') {
+      setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
+      setTimeout(() => setErrorMessage(''), 5000);
+      return;
     }
-  }, [micStatus]);
+
+    if (micStatus === 'idle' || micStatus === 'requested') {
+      setMicStatus('requested');
+      await requestMicPermission();
+      return;
+    }
+
+    if (micStatus === 'granted') {
+      if (!isListening) {
+        try {
+          recognitionRef.current?.start();
+          setIsListening(true);
+        } catch (error) {
+          console.error('Ошибка запуска распознавания:', error);
+          setErrorMessage('Не удалось запустить распознавание речи');
+          setTimeout(() => setErrorMessage(''), 5000);
+        }
+      } else {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+        setText('Микрофон выключен');
+      }
+    }
+  }, [micStatus, isListening, requestMicPermission]);
 
   const handleTeamCountChange = useCallback((value: number) => {
     setTeamCount(Math.max(1, Math.min(10, value)));
