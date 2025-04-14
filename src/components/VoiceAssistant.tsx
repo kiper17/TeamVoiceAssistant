@@ -242,7 +242,21 @@ const VoiceAssistant = () => {
       // Сортируем команды по очкам
       loadedTeams.sort((a, b) => b.points - a.points);
       
-      setTeams(loadedTeams);
+      // Для мобильных устройств добавляем дополнительную проверку
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        // Проверяем, действительно ли нужно обновить состояние
+        setTeams(prevTeams => {
+          const hasChanges = prevTeams.some((prevTeam, index) => {
+            const newTeam = loadedTeams[index];
+            return !newTeam || prevTeam.points !== newTeam.points;
+          });
+          
+          return hasChanges ? loadedTeams : prevTeams;
+        });
+      } else {
+        setTeams(loadedTeams);
+      }
     }, (error) => {
       console.error("Ошибка подписки на команды:", error);
       setErrorMessage("Ошибка загрузки команд");
@@ -277,36 +291,58 @@ const VoiceAssistant = () => {
 
     setIsProcessing(true);
     try {
-      await runTransaction(db, async (transaction) => {
-        const teamRef = doc(db, 'teams', teamId);
-        const teamSnap = await transaction.get(teamRef);
-        
-        if (!teamSnap.exists()) {
-          throw new Error('Команда не найдена');
-        }
+      const teamRef = doc(db, 'teams', teamId);
+      const teamSnap = await getDoc(teamRef);
+      
+      if (!teamSnap.exists()) {
+        throw new Error('Команда не найдена');
+      }
 
-        const teamData = teamSnap.data();
-        if (teamData.ownerId !== currentUser.id) {
-          throw new Error('Нет прав для изменения этой команды');
-        }
+      const teamData = teamSnap.data();
+      if (teamData.ownerId !== currentUser.id) {
+        throw new Error('Нет прав для изменения этой команды');
+      }
 
-        const currentPoints = teamData.points || 0;
-        const newPoints = currentPoints + delta;
+      const currentPoints = teamData.points || 0;
+      const newPoints = currentPoints + delta;
 
-        transaction.update(teamRef, {
-          points: newPoints,
-          lastAccessed: new Date().toISOString()
-        });
+      // Обновляем локальное состояние сразу для мгновенного отображения
+      setTeams(prevTeams => 
+        prevTeams.map(team => 
+          team.id === teamId 
+            ? { ...team, points: newPoints }
+            : team
+        )
+      );
 
-        // Обновляем локальное состояние
-        setTeams(prevTeams => 
-          prevTeams.map(team => 
-            team.id === teamId 
-              ? { ...team, points: newPoints }
-              : team
-          )
-        );
+      // Обновляем в базе данных
+      await updateDoc(teamRef, {
+        points: newPoints,
+        lastAccessed: new Date().toISOString()
       });
+
+      // Для мобильных устройств делаем дополнительную проверку
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        // Ждем небольшое время и проверяем актуальность данных
+        setTimeout(async () => {
+          const updatedSnap = await getDoc(teamRef);
+          if (updatedSnap.exists()) {
+            const updatedData = updatedSnap.data();
+            if (updatedData.points !== newPoints) {
+              // Если данные не совпадают, обновляем локальное состояние
+              setTeams(prevTeams => 
+                prevTeams.map(team => 
+                  team.id === teamId 
+                    ? { ...team, points: updatedData.points }
+                    : team
+                )
+              );
+            }
+          }
+        }, 500);
+      }
+
     } catch (error) {
       console.error("Ошибка обновления очков:", error);
       setErrorMessage(error instanceof Error ? error.message : "Не удалось изменить очки");
