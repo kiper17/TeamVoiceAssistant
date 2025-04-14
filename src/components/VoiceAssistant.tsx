@@ -356,6 +356,7 @@ const VoiceAssistant = () => {
     if (!currentUser || teams.length === 0) return;
 
     const normalizedCommand = command.toLowerCase().trim();
+    console.log('Распознанная команда:', normalizedCommand); // Отладочная информация
     
     if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
       setIsListening(false);
@@ -371,29 +372,31 @@ const VoiceAssistant = () => {
       return;
     }
 
-    // Словарь для преобразования слов в числа
-    const numberWords: { [key: string]: number } = {
-      'один': 1, 'одно': 1, 'одна': 1,
-      'два': 2, 'две': 2,
-      'три': 3,
-      'четыре': 4,
-      'пять': 5,
-      'шесть': 6,
-      'семь': 7,
-      'восемь': 8,
-      'девять': 9,
-      'десять': 10
-    };
-
-    // Улучшенное регулярное выражение для распознавания команд
+    // Упрощенное регулярное выражение
     const pointsMatch = normalizedCommand.match(
-      /(команда|команде|команду)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(?:(\d+)|(?:(\w+)\s+(?:очк(?:а|ов|и)|балл(?:а|ов|и))))/i
+      /(команда|команде|команду)\s+(\d+)\s*(?:(\+|\-|плюс|минус|дать|добавить|убрать|снять))\s*(?:(\d+)|(\w+))?\s*(?:очк(?:а|ов|и)|балл(?:а|ов|и))?/i
     );
+
+    console.log('Результат match:', pointsMatch); // Отладочная информация
 
     if (pointsMatch) {
       const teamNumber = parseInt(pointsMatch[2]);
       const operator = pointsMatch[3].toLowerCase();
-      let points = 0;
+      let points = 1; // Значение по умолчанию
+
+      // Словарь для преобразования слов в числа
+      const numberWords: { [key: string]: number } = {
+        'один': 1, 'одно': 1, 'одна': 1,
+        'два': 2, 'две': 2,
+        'три': 3,
+        'четыре': 4,
+        'пять': 5,
+        'шесть': 6,
+        'семь': 7,
+        'восемь': 8,
+        'девять': 9,
+        'десять': 10
+      };
 
       // Определяем количество очков
       if (pointsMatch[4]) {
@@ -403,22 +406,23 @@ const VoiceAssistant = () => {
         // Если указано словом
         const word = pointsMatch[5].toLowerCase();
         points = numberWords[word] || 1;
-      } else {
-        // Если количество не указано, используем 1
-        points = 1;
       }
-      
+
+      console.log('Параметры команды:', { teamNumber, operator, points }); // Отладочная информация
+
       if (operator.includes('минус') || operator === '-' || operator.includes('убрать') || operator.includes('снять')) {
         points = -points;
       }
       
       const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
+      console.log('Найдена команда:', teamToUpdate); // Отладочная информация
       
       if (teamToUpdate) {
         try {
           await updateTeamPoints(teamToUpdate.id, points);
           setText(`Команда ${teamNumber}: ${points > 0 ? '+' : ''}${points} очков`);
         } catch (error) {
+          console.error('Ошибка при обновлении очков:', error); // Отладочная информация
           setText(`Ошибка изменения очков команды ${teamNumber}`);
         }
       } else {
