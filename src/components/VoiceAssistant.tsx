@@ -95,14 +95,17 @@ const VoiceAssistant = () => {
     recognitionRef.current.maxAlternatives = 3;
 
     recognitionRef.current.onstart = () => {
+      console.log('Начало распознавания речи');
       setText('Говорите...');
     };
 
     recognitionRef.current.onresult = (event: any) => {
+      console.log('Получен результат распознавания:', event);
       const results = event.results;
       const last = results[results.length - 1];
       const transcript = last[0].transcript.trim();
       
+      console.log('Распознанный текст:', transcript);
       setText(transcript);
       handleVoiceCommand(transcript);
     };
@@ -121,8 +124,10 @@ const VoiceAssistant = () => {
     };
 
     recognitionRef.current.onend = () => {
+      console.log('Распознавание завершено');
       if (isListening) {
         try {
+          console.log('Попытка перезапуска распознавания');
           recognitionRef.current?.start();
         } catch (error) {
           console.error('Ошибка перезапуска распознавания:', error);
@@ -323,10 +328,13 @@ const VoiceAssistant = () => {
   }, [currentUser, isProcessing]);
 
   const handleVoiceCommand = useCallback(async (command: string) => {
-    if (!currentUser || teams.length === 0) return;
+    if (!currentUser || teams.length === 0) {
+      console.log('Нет пользователя или команд:', { currentUser, teamsLength: teams.length });
+      return;
+    }
 
     const normalizedCommand = command.toLowerCase().trim();
-    console.log('Распознанная команда:', normalizedCommand); // Отладочная информация
+    console.log('Обработка команды:', normalizedCommand);
     
     if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
       setIsListening(false);
@@ -342,57 +350,30 @@ const VoiceAssistant = () => {
       return;
     }
 
-    // Упрощенное регулярное выражение
-    const pointsMatch = normalizedCommand.match(
-      /(команда|команде|команду)\s+(\d+)\s*(?:(\+|\-|плюс|минус|дать|добавить|убрать|снять))\s*(?:(\d+)|(\w+))?\s*(?:очк(?:а|ов|и)|балл(?:а|ов|и))?/i
-    );
+    // Простое регулярное выражение для команд
+    const simpleMatch = normalizedCommand.match(/команд[аеу]\s*(\d+)\s*([\+\-]|плюс|минус|дать|добавить|убрать|снять)\s*(\d+)?/i);
+    console.log('Результат простого match:', simpleMatch);
 
-    console.log('Результат match:', pointsMatch); // Отладочная информация
+    if (simpleMatch) {
+      const teamNumber = parseInt(simpleMatch[1]);
+      const operator = simpleMatch[2].toLowerCase();
+      let points = parseInt(simpleMatch[3]) || 1;
 
-    if (pointsMatch) {
-      const teamNumber = parseInt(pointsMatch[2]);
-      const operator = pointsMatch[3].toLowerCase();
-      let points = 1; // Значение по умолчанию
+      console.log('Разбор команды:', { teamNumber, operator, points });
 
-      // Словарь для преобразования слов в числа
-      const numberWords: { [key: string]: number } = {
-        'один': 1, 'одно': 1, 'одна': 1,
-        'два': 2, 'две': 2,
-        'три': 3,
-        'четыре': 4,
-        'пять': 5,
-        'шесть': 6,
-        'семь': 7,
-        'восемь': 8,
-        'девять': 9,
-        'десять': 10
-      };
-
-      // Определяем количество очков
-      if (pointsMatch[4]) {
-        // Если указано число
-        points = parseInt(pointsMatch[4]);
-      } else if (pointsMatch[5]) {
-        // Если указано словом
-        const word = pointsMatch[5].toLowerCase();
-        points = numberWords[word] || 1;
-      }
-
-      console.log('Параметры команды:', { teamNumber, operator, points }); // Отладочная информация
-
-      if (operator.includes('минус') || operator === '-' || operator.includes('убрать') || operator.includes('снять')) {
+      if (operator === '-' || operator.includes('минус') || operator.includes('убрать') || operator.includes('снять')) {
         points = -points;
       }
       
       const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
-      console.log('Найдена команда:', teamToUpdate); // Отладочная информация
+      console.log('Найдена команда для обновления:', teamToUpdate);
       
       if (teamToUpdate) {
         try {
           await updateTeamPoints(teamToUpdate.id, points);
           setText(`Команда ${teamNumber}: ${points > 0 ? '+' : ''}${points} очков`);
         } catch (error) {
-          console.error('Ошибка при обновлении очков:', error); // Отладочная информация
+          console.error('Ошибка обновления очков:', error);
           setText(`Ошибка изменения очков команды ${teamNumber}`);
         }
       } else {
@@ -401,29 +382,7 @@ const VoiceAssistant = () => {
       return;
     }
 
-    // Добавленные новые команды
-    if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
-      const teamNumberMatch = normalizedCommand.match(/команда\s+(\d+)/i);
-      if (teamNumberMatch) {
-        const teamNumber = parseInt(teamNumberMatch[1]);
-        const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
-        if (teamToUpdate) {
-          await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
-          setText(`Очки команды ${teamNumber} сброшены`);
-        }
-      }
-      return;
-    }
-
-    if (normalizedCommand.includes('удалить команду') && normalizedCommand.match(/\d+/)) {
-      const matchResult = normalizedCommand.match(/\d+/);
-      if (matchResult) {
-        const teamNumber = parseInt(matchResult[0]);
-        setText(`Для удаления команды ${teamNumber} подтвердите действие в интерфейсе`);
-        return;
-      }
-    }
-
+    console.log('Команда не распознана');
     setText(`Не распознано: "${normalizedCommand}"`);
   }, [currentUser, teams, isListening, updateTeamPoints]);
 
