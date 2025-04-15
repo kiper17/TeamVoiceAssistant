@@ -296,7 +296,10 @@ const VoiceAssistant = () => {
   }, [currentUser, isProcessing]);
 
   const handleVoiceCommand = useCallback(async (command: string) => {
-    if (!currentUser || teams.length === 0) return;
+    if (!currentUser || teams.length === 0) {
+      setText('Ошибка: нет активного пользователя или команд');
+      return;
+    }
 
     const normalizedCommand = command.toLowerCase().trim();
     
@@ -313,6 +316,8 @@ const VoiceAssistant = () => {
       }
       return;
     }
+
+    setText('Обработка команды...');
 
     const pointsMatch = normalizedCommand.match(
       /(команда|команде|команду|группа|группе|группу)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
@@ -333,6 +338,7 @@ const VoiceAssistant = () => {
       
       if (groupToUpdate) {
         try {
+          setText(`Обновление очков для ${groupToUpdate.name}...`);
           await updateTeamPoints(groupToUpdate.id, points);
           setText(`${groupToUpdate.name}: ${points > 0 ? '+' : ''}${points} очков`);
         } catch (error) {
@@ -353,9 +359,14 @@ const VoiceAssistant = () => {
           team.name === `Группа ${groupNumber}` || team.name === `Команда ${groupNumber}`
         );
         if (groupToUpdate) {
+          setText(`Сброс очков для ${groupToUpdate.name}...`);
           await updateTeamPoints(groupToUpdate.id, -groupToUpdate.points);
           setText(`Очки ${groupToUpdate.name} сброшены`);
+        } else {
+          setText(`Группа/Команда ${groupNumber} не найдена`);
         }
+      } else {
+        setText('Не указан номер команды для сброса очков');
       }
       return;
     }
@@ -369,7 +380,7 @@ const VoiceAssistant = () => {
       }
     }
 
-    setText(`Не распознано: "${normalizedCommand}"`);
+    setText(`Команда не распознана: "${normalizedCommand}"`);
   }, [currentUser, teams, isListening, updateTeamPoints]);
 
   const createTeams = useCallback(async () => {
