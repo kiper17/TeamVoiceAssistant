@@ -497,29 +497,76 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.mic-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(25, 118, 210, 0.1);
+  transform: scale(0);
+  border-radius: 50%;
+  transition: transform 0.3s ease-out;
 }
 
 .mic-button.listening {
-  background: rgba(25, 118, 210, 0.2);
+  background: rgba(25, 118, 210, 0.1);
   border: 2px solid #1976D2;
+  transform: scale(0.95);
 }
 
-.mic-button:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+.mic-button.listening::before {
+  transform: scale(1);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.5;
+  }
+}
+
+.mic-button:active {
+  transform: scale(0.95);
+  background: rgba(25, 118, 210, 0.15);
+}
+
+.mic-button:hover:not(:disabled):not(.listening) {
+  transform: scale(1.02);
+  background: rgba(25, 118, 210, 0.05);
 }
 
 .mic-button:disabled {
   background-color: #e0e0e0;
   cursor: not-allowed;
+  transform: none;
 }
 
 .mic-icon {
   width: 40px;
   height: 40px;
-  transition: fill 0.3s;
+  transition: all 0.3s;
+  z-index: 1;
+}
+
+.mic-button.listening .mic-icon {
+  color: #1976D2;
 }
 
 .mic-status {
@@ -1055,20 +1102,48 @@ button.secondary-button:hover:not(:disabled) {
   }
 
   .team-header {
-    padding: 10px;
-    flex-direction: column;
-    align-items: flex-start;
+    padding: 12px;
+    flex-direction: row;
+    align-items: center;
     gap: 10px;
   }
 
-  .team-actions {
+  .team-info {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 15px;
     width: 100%;
-    justify-content: space-between;
+  }
+
+  .team-name {
+    width: auto;
+    min-width: 100px;
+  }
+
+  .team-points {
+    margin: 0;
+    padding: 4px 12px;
+  }
+
+  .team-actions {
+    width: auto;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .points-button {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    border-radius: 8px;
   }
 
   .mic-button {
     width: 60px;
     height: 60px;
+    border-radius: 20px;
   }
 
   .mic-icon {
@@ -1101,12 +1176,6 @@ button.secondary-button:hover:not(:disabled) {
   .secondary-button,
   .primary-button {
     width: 100%;
-  }
-
-  .points-button {
-    width: 44px;
-    height: 34px;
-    font-size: 18px;
   }
 }
 
@@ -1146,6 +1215,36 @@ button.secondary-button:hover:not(:disabled) {
   .modal-footer button {
     flex: 1;
     max-width: 160px;
+  }
+
+  .team-info {
+    gap: 10px;
+  }
+
+  .team-name {
+    min-width: 90px;
+  }
+
+  .team-points {
+    padding: 3px 10px;
+    font-size: 1rem;
+  }
+
+  .points-button {
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+  }
+
+  .mic-button {
+    width: 50px;
+    height: 50px;
+    border-radius: 16px;
+  }
+
+  .mic-icon {
+    width: 24px;
+    height: 24px;
   }
 }
 

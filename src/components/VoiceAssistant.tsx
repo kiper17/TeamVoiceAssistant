@@ -486,8 +486,7 @@ const VoiceAssistant = () => {
     );
   }, []);
 
-  const handleMicClick = useCallback(async () => {
-    // На мобильных устройствах нужно явное пользовательское действие
+  const handleMicStart = useCallback(async () => {
     if (micStatus === 'idle') {
       setMicStatus('requested');
       try {
@@ -495,7 +494,7 @@ const VoiceAssistant = () => {
         stream.getTracks().forEach(track => track.stop());
         setMicStatus('granted');
         setMicPermissionGranted(true);
-        setIsListening(true); // Только после разрешения
+        setIsListening(true);
       } catch (error) {
         console.error('Microphone access denied:', error);
         setMicStatus('denied');
@@ -505,9 +504,17 @@ const VoiceAssistant = () => {
         setTimeout(() => setErrorMessage(''), 5000);
       }
     } else if (micStatus === 'granted') {
-      setIsListening(prev => !prev);
+      setIsListening(true);
+      setText('Говорите...');
     }
   }, [micStatus]);
+
+  const handleMicEnd = useCallback(() => {
+    if (micStatus === 'granted' && isListening) {
+      setIsListening(false);
+      setText('Обработка...');
+    }
+  }, [micStatus, isListening]);
 
   const handleTeamCountChange = useCallback((value: number) => {
     setTeamCount(Math.max(1, Math.min(10, value)));
@@ -744,7 +751,11 @@ const VoiceAssistant = () => {
             <div className="mic-container">
               <button 
                 ref={buttonRef}
-                onClick={handleMicClick}
+                onMouseDown={handleMicStart}
+                onMouseUp={handleMicEnd}
+                onMouseLeave={handleMicEnd}
+                onTouchStart={handleMicStart}
+                onTouchEnd={handleMicEnd}
                 className={`mic-button ${isListening ? 'listening' : ''}`}
                 disabled={micStatus === 'denied' || isProcessing}
               >
@@ -759,9 +770,9 @@ const VoiceAssistant = () => {
                 ) : micStatus === 'requested' ? (
                   <span className="info">Разрешите доступ к микрофону...</span>
                 ) : isListening ? (
-                  <span className="active">Слушаю...</span>
+                  <span className="active">Говорите...</span>
                 ) : (
-                  <span>Нажмите для голосовой команды</span>
+                  <span>Зажмите для записи</span>
                 )}
               </div>
             </div>
