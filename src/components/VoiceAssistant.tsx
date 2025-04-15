@@ -486,35 +486,36 @@ const VoiceAssistant = () => {
     );
   }, []);
 
-  const handleMicStart = useCallback(async () => {
-    if (micStatus === 'idle') {
+  const handleMicClick = useCallback(async () => {
+    if (micStatus === 'idle' || micStatus === 'denied') {
       setMicStatus('requested');
+      setText('Запрашиваю доступ к микрофону...');
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
         setMicStatus('granted');
         setMicPermissionGranted(true);
         setIsListening(true);
+        setText('Микрофон включен. Говорите...');
+        setSuccessMessage('Доступ к микрофону получен');
+        setTimeout(() => setSuccessMessage(''), 3000);
       } catch (error) {
         console.error('Microphone access denied:', error);
         setMicStatus('denied');
         setMicPermissionGranted(false);
         setIsListening(false);
-        setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
+        setText('Нет доступа к микрофону');
+        setErrorMessage('Для работы голосового управления необходим доступ к микрофону. Разрешите доступ в настройках браузера.');
         setTimeout(() => setErrorMessage(''), 5000);
       }
     } else if (micStatus === 'granted') {
-      setIsListening(true);
-      setText('Говорите...');
+      setIsListening(prev => {
+        const newState = !prev;
+        setText(newState ? 'Микрофон включен. Говорите...' : 'Микрофон выключен');
+        return newState;
+      });
     }
   }, [micStatus]);
-
-  const handleMicEnd = useCallback(() => {
-    if (micStatus === 'granted' && isListening) {
-      setIsListening(false);
-      setText('Обработка...');
-    }
-  }, [micStatus, isListening]);
 
   const handleTeamCountChange = useCallback((value: number) => {
     setTeamCount(Math.max(1, Math.min(10, value)));
@@ -751,13 +752,9 @@ const VoiceAssistant = () => {
             <div className="mic-container">
               <button 
                 ref={buttonRef}
-                onMouseDown={handleMicStart}
-                onMouseUp={handleMicEnd}
-                onMouseLeave={handleMicEnd}
-                onTouchStart={handleMicStart}
-                onTouchEnd={handleMicEnd}
-                className={`mic-button ${isListening ? 'listening' : ''}`}
-                disabled={micStatus === 'denied' || isProcessing}
+                onClick={handleMicClick}
+                className={`mic-button ${isListening ? 'listening' : ''} ${micStatus === 'denied' ? 'denied' : ''}`}
+                disabled={isProcessing}
               >
                 <svg viewBox="0 0 24 24" className="mic-icon">
                   <path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
@@ -766,13 +763,15 @@ const VoiceAssistant = () => {
               
               <div className="mic-status">
                 {micStatus === 'denied' ? (
-                  <span className="warning">Доступ к микрофону запрещен</span>
+                  <span className="error">Доступ к микрофону запрещен. Нажмите на кнопку микрофона, чтобы повторить запрос.</span>
                 ) : micStatus === 'requested' ? (
-                  <span className="info">Разрешите доступ к микрофону...</span>
-                ) : isListening ? (
-                  <span className="active">Говорите...</span>
+                  <span className="warning">Разрешите доступ к микрофону в появившемся окне...</span>
+                ) : micStatus === 'granted' && isListening ? (
+                  <span className="success">Микрофон активен. Говорите...</span>
+                ) : micStatus === 'granted' ? (
+                  <span className="info">Микрофон готов. Нажмите для начала записи.</span>
                 ) : (
-                  <span>Зажмите для записи</span>
+                  <span className="info">Нажмите на кнопку микрофона для начала работы</span>
                 )}
               </div>
             </div>

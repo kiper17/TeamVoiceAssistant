@@ -558,6 +558,15 @@ body {
   transform: none;
 }
 
+.mic-button.denied {
+  background-color: #f44336;
+  border-color: #d32f2f;
+}
+
+.mic-button.denied:hover {
+  background-color: #d32f2f;
+}
+
 .mic-icon {
   width: 40px;
   height: 40px;
@@ -570,43 +579,66 @@ body {
 }
 
 .mic-status {
+  margin-top: 10px;
   text-align: center;
   font-size: 0.9rem;
+  min-height: 20px;
 }
 
-.warning {
+.mic-status .error {
   color: #f44336;
+  font-weight: 500;
 }
 
-.active {
-  color: #2196F3;
-  font-weight: bold;
+.mic-status .warning {
+  color: #ff9800;
+  font-weight: 500;
 }
 
-/* Вывод распознанного текста */
-.voice-output {
-  margin-top: 15px;
+.mic-status .success {
+  color: #4caf50;
+  font-weight: 500;
 }
 
-.voice-output h4 {
-  margin: 0 0 10px;
-  color: #333;
-  transition: color 0.3s;
+.mic-status .info {
+  color: #2196f3;
+  font-weight: 500;
 }
 
-.output-text {
-  min-height: 60px;
-  padding: 15px;
-  background-color: #f5f5f5;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-  transition: all 0.3s;
+.message {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
-.placeholder {
-  color: #999;
-  font-style: italic;
-  transition: color 0.3s;
+.message.error {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+.message.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
 }
 
 /* Модальное окно */
@@ -789,36 +821,6 @@ button.secondary-button {
 button.secondary-button:hover:not(:disabled) {
   background: #e8eaed;
   color: #333;
-}
-
-/* Сообщения */
-.message {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 15px 25px;
-  border-radius: 4px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-  z-index: 1100;
-  animation: slideIn 0.3s ease-out;
-  max-width: 80%;
-  text-align: center;
-}
-
-@keyframes slideIn {
-  from { top: -50px; opacity: 0; }
-  to { top: 20px; opacity: 1; }
-}
-
-.message.success {
-  background-color: #2196F3;
-  color: white;
-}
-
-.message.error {
-  background-color: #f44336;
-  color: white;
 }
 
 /* Предупреждение о неподдерживаемом браузере */
