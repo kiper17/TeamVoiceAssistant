@@ -43,7 +43,10 @@ body {
 
 .user-info {
   display: flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
   gap: 10px;
 }
 
@@ -276,8 +279,11 @@ body {
 
 .team-info {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 10px;
 }
 
 .team-name {
@@ -285,11 +291,22 @@ body {
   font-size: 1.1rem;
   color: #333;
   transition: color 0.3s;
+  width: 120px;
 }
 
 .team-points {
-  color: #666;
-  transition: color 0.3s;
+  color: #333;
+  transition: all 0.3s;
+  font-size: 1.1rem;
+  text-align: center;
+  flex: 1;
+  background-color: #fff;
+  border: 2px solid #333;
+  border-radius: 20px;
+  padding: 4px 16px;
+  margin: 0 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  font-weight: 500;
 }
 
 .team-actions {
@@ -1021,9 +1038,9 @@ button.secondary-button:hover:not(:disabled) {
   }
 
   .user-info {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 5px;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
   }
 
   .management-actions {
@@ -1130,4 +1147,10 @@ button.secondary-button:hover:not(:disabled) {
     flex: 1;
     max-width: 160px;
   }
+}
+
+.dark-mode .team-points {
+  border-color: #8B949E;
+  background-color: #21262D;
+  color: #C9D1D9;
 }

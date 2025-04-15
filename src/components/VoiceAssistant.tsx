@@ -315,11 +315,11 @@ const VoiceAssistant = () => {
     }
 
     const pointsMatch = normalizedCommand.match(
-      /(команда|команде|команду)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
+      /(команда|команде|команду|группа|группе|группу)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
     );
 
     if (pointsMatch) {
-      const teamNumber = parseInt(pointsMatch[2]);
+      const groupNumber = parseInt(pointsMatch[2]);
       const operator = pointsMatch[3].toLowerCase();
       let points = parseInt(pointsMatch[4]) || 1;
       
@@ -327,40 +327,44 @@ const VoiceAssistant = () => {
         points = -points;
       }
       
-      const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
+      const groupToUpdate = teams.find(team => 
+        team.name === `Группа ${groupNumber}` || team.name === `Команда ${groupNumber}`
+      );
       
-      if (teamToUpdate) {
+      if (groupToUpdate) {
         try {
-          await updateTeamPoints(teamToUpdate.id, points);
-          setText(`Команда ${teamNumber}: ${points > 0 ? '+' : ''}${points} очков`);
+          await updateTeamPoints(groupToUpdate.id, points);
+          setText(`${groupToUpdate.name}: ${points > 0 ? '+' : ''}${points} очков`);
         } catch (error) {
-          setText(`Ошибка изменения очков команды ${teamNumber}`);
+          setText(`Ошибка изменения очков для ${groupToUpdate.name}`);
         }
       } else {
-        setText(`Команда ${teamNumber} не найдена`);
+        setText(`Группа/Команда ${groupNumber} не найдена`);
       }
       return;
     }
 
     // Добавленные новые команды
     if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
-      const teamNumberMatch = normalizedCommand.match(/команда\s+(\d+)/i);
-      if (teamNumberMatch) {
-        const teamNumber = parseInt(teamNumberMatch[1]);
-        const teamToUpdate = teams.find(team => team.name === `Команда ${teamNumber}`);
-        if (teamToUpdate) {
-          await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
-          setText(`Очки команды ${teamNumber} сброшены`);
+      const numberMatch = normalizedCommand.match(/(команда|группа)\s+(\d+)/i);
+      if (numberMatch) {
+        const groupNumber = parseInt(numberMatch[2]);
+        const groupToUpdate = teams.find(team => 
+          team.name === `Группа ${groupNumber}` || team.name === `Команда ${groupNumber}`
+        );
+        if (groupToUpdate) {
+          await updateTeamPoints(groupToUpdate.id, -groupToUpdate.points);
+          setText(`Очки ${groupToUpdate.name} сброшены`);
         }
       }
       return;
     }
 
-    if (normalizedCommand.includes('удалить команду') && normalizedCommand.match(/\d+/)) {
+    if ((normalizedCommand.includes('удалить команду') || normalizedCommand.includes('удалить группу')) && normalizedCommand.match(/\d+/)) {
       const matchResult = normalizedCommand.match(/\d+/);
       if (matchResult) {
-        const teamNumber = parseInt(matchResult[0]);
-        setText(`Для удаления команды ${teamNumber} подтвердите действие в интерфейсе`);
+        const groupNumber = parseInt(matchResult[0]);
+        setText(`Для удаления группы/команды ${groupNumber} подтвердите действие в интерфейсе`);
         return;
       }
     }
@@ -408,7 +412,7 @@ const VoiceAssistant = () => {
 
         const newTeamRef = doc(collection(db, 'teams'));
         batch.set(newTeamRef, {
-          name: `Команда ${i + 1}`,
+          name: `Группа ${i + 1}`,
           members,
           points: 0,
           ownerId: currentUser.id,
@@ -632,7 +636,7 @@ const VoiceAssistant = () => {
       <main className="app-main">
         <div className="teams-section">
           <div className="section-header">
-            <h2>Управление командами</h2>
+            <h2>Управление группами</h2>
           </div>
 
           <div className="management-actions">
@@ -641,7 +645,7 @@ const VoiceAssistant = () => {
               onClick={() => setShowTeamCreator(true)}
               disabled={isProcessing}
             >
-              Создать команды
+              Создать группы
             </button>
             <button 
               className="cleanup-button"
@@ -663,7 +667,7 @@ const VoiceAssistant = () => {
                       onClick={() => toggleTeamExpansion(team.id)}
                     >
                       <div className="team-info">
-                        <span className="team-name">{team.name}</span>
+                        <span className="team-name">{team.name.replace('Команда', 'Группа')}</span>
                         <span className="team-points">{team.points} очков</span>
                       </div>
                       <div className="team-actions">
@@ -721,13 +725,13 @@ const VoiceAssistant = () => {
               <svg viewBox="0 0 24 24" className="empty-icon">
                 <path fill="currentColor" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12,10.5A1.5,1.5 0 0,1 13.5,12A1.5,1.5 0 0,1 12,13.5A1.5,1.5 0 0,1 10.5,12A1.5,1.5 0 0,1 12,10.5M7.5,10.5A1.5,1.5 0 0,1 9,12A1.5,1.5 0 0,1 7.5,13.5A1.5,1.5 0 0,1 6,12A1.5,1.5 0 0,1 7.5,10.5M16.5,10.5A1.5,1.5 0 0,1 18,12A1.5,1.5 0 0,1 16.5,13.5A1.5,1.5 0 0,1 15,12A1.5,1.5 0 0,1 16.5,10.5Z" />
               </svg>
-              <p>Нет созданных команд</p>
+              <p>Нет созданных групп</p>
               <button 
                 onClick={() => setShowTeamCreator(true)}
                 className="primary-button"
                 disabled={isProcessing}
               >
-                Создать команды
+                Создать группы
               </button>
             </div>
           )}
