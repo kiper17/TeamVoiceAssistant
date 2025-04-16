@@ -97,7 +97,6 @@ const VoiceAssistant = () => {
     recognitionRef.current.continuous = true;
     recognitionRef.current.maxAlternatives = 3;
 
-    // Добавляем обработчики для лучшей поддержки мобильных устройств
     recognitionRef.current.onstart = () => {
       console.log('Распознавание речи начато');
       setIsListening(true);
@@ -127,8 +126,7 @@ const VoiceAssistant = () => {
       if (event.error === 'not-allowed') {
         setMicPermissionGranted(false);
         setMicStatus('denied');
-        setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
-        setTimeout(() => setErrorMessage(''), 5000);
+        setErrorMessage('Доступ к микрофону запрещен');
       } else if (event.error === 'no-speech') {
         // Игнорируем ошибку отсутствия речи на мобильных устройствах
         if (!isMobile) {
@@ -136,9 +134,8 @@ const VoiceAssistant = () => {
         }
       } else if (event.error === 'audio-capture') {
         setErrorMessage('Ошибка захвата аудио. Проверьте подключение микрофона.');
-        setTimeout(() => setErrorMessage(''), 5000);
       }
-      setIsListening(false);
+      setTimeout(() => setErrorMessage(''), 3000);
     };
 
     recognitionRef.current.onresult = (event: any) => {
