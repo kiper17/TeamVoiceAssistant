@@ -574,7 +574,11 @@ const VoiceAssistant = () => {
         setTimeout(() => setErrorMessage(''), 5000);
       }
     } else if (micStatus === 'granted') {
-      if (!isListening) {
+      if (isListening) {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+        setText('Микрофон выключен');
+      } else {
         recognitionRef.current?.start();
         setIsListening(true);
         setText('Микрофон включен. Говорите...');
@@ -641,9 +645,8 @@ const VoiceAssistant = () => {
 
     recognitionRef.current.onend = () => {
       console.log('Распознавание речи завершено');
-      if (isListening) {
-        recognitionRef.current?.start();
-      }
+      setIsListening(false);
+      setText('Микрофон выключен');
     };
 
     recognitionRef.current.onerror = (event: any) => {
@@ -658,6 +661,8 @@ const VoiceAssistant = () => {
         setErrorMessage(`Ошибка распознавания: ${event.error}`);
       }
       setTimeout(() => setErrorMessage(''), 3000);
+      setIsListening(false);
+      setText('Микрофон выключен');
     };
 
     recognitionRef.current.onresult = (event: any) => {
