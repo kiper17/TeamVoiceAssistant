@@ -562,15 +562,9 @@ const VoiceAssistant = () => {
         setTimeout(() => setText(''), 3000);
         
         if (recognitionRef.current) {
-          try {
-            recognitionRef.current.start();
-            setIsListening(true);
-            setText('Микрофон включен. Говорите...');
-          } catch (error) {
-            console.error('Ошибка запуска распознавания:', error);
-            setErrorMessage('Ошибка запуска микрофона. Попробуйте перезагрузить страницу.');
-            setTimeout(() => setErrorMessage(''), 5000);
-          }
+          recognitionRef.current.start();
+          setIsListening(true);
+          setText('Микрофон включен. Говорите...');
         }
       } catch (error) {
         console.error('Ошибка доступа к микрофону:', error);
@@ -580,26 +574,10 @@ const VoiceAssistant = () => {
         setTimeout(() => setErrorMessage(''), 5000);
       }
     } else if (micStatus === 'granted') {
-      if (isListening) {
-        try {
-          recognitionRef.current?.stop();
-          setIsListening(false);
-          setText('Микрофон выключен');
-        } catch (error) {
-          console.error('Ошибка остановки микрофона:', error);
-          setErrorMessage('Ошибка выключения микрофона');
-          setTimeout(() => setErrorMessage(''), 5000);
-        }
-      } else {
-        try {
-          recognitionRef.current?.start();
-          setIsListening(true);
-          setText('Микрофон включен. Говорите...');
-        } catch (error) {
-          console.error('Ошибка запуска микрофона:', error);
-          setErrorMessage('Ошибка включения микрофона. Попробуйте перезагрузить страницу.');
-          setTimeout(() => setErrorMessage(''), 5000);
-        }
+      if (!isListening) {
+        recognitionRef.current?.start();
+        setIsListening(true);
+        setText('Микрофон включен. Говорите...');
       }
     }
   }, [isSupported, micStatus, isListening]);
@@ -659,27 +637,18 @@ const VoiceAssistant = () => {
     recognitionRef.current.onstart = () => {
       console.log('Распознавание речи начато');
       setIsListening(true);
-      setText('Микрофон включен. Говорите...');
     };
 
     recognitionRef.current.onend = () => {
       console.log('Распознавание речи завершено');
-      if (isListening) {
-        try {
-          recognitionRef.current?.start();
-        } catch (error) {
-          console.error('Ошибка перезапуска распознавания:', error);
-          setIsListening(false);
-          setText('Микрофон выключен');
-        }
-      }
+      setIsListening(false);
+      setText('Микрофон выключен');
     };
 
     recognitionRef.current.onerror = (event: any) => {
       console.error('Ошибка распознавания:', event.error);
       if (event.error === 'no-speech') {
-        // Игнорируем ошибку отсутствия речи
-        return;
+        setText('Речь не обнаружена');
       } else if (event.error === 'not-allowed') {
         setMicPermissionGranted(false);
         setMicStatus('denied');
@@ -688,8 +657,10 @@ const VoiceAssistant = () => {
         setErrorMessage(`Ошибка распознавания: ${event.error}`);
       }
       setTimeout(() => setErrorMessage(''), 3000);
+      setIsListening(false);
+      setText('Микрофон выключен');
     };
-  }, [isListening]);
+  }, []);
 
   if (!isSupported) {
     return (
