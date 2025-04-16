@@ -97,13 +97,29 @@ const VoiceAssistant = () => {
     recognitionRef.current.continuous = true;
     recognitionRef.current.maxAlternatives = 3;
 
-    recognitionRef.current.onresult = (event: any) => {
-      const results = event.results;
-      const last = results[results.length - 1];
-      const transcript = last[0].transcript.trim();
-      
-      setText(transcript);
-      handleVoiceCommand(transcript);
+    // Добавляем обработчики для лучшей поддержки мобильных устройств
+    recognitionRef.current.onstart = () => {
+      console.log('Распознавание речи начато');
+      setIsListening(true);
+    };
+
+    recognitionRef.current.onend = () => {
+      console.log('Распознавание речи завершено');
+      if (isListening) {
+        // На мобильных устройствах перезапускаем распознавание с небольшой задержкой
+        if (isMobile) {
+          setTimeout(() => {
+            try {
+              recognitionRef.current?.start();
+            } catch (error) {
+              console.error('Ошибка перезапуска распознавания:', error);
+              setIsListening(false);
+            }
+          }, 100);
+        } else {
+          recognitionRef.current?.start();
+        }
+      }
     };
 
     recognitionRef.current.onerror = (event: any) => {
@@ -111,14 +127,27 @@ const VoiceAssistant = () => {
       if (event.error === 'not-allowed') {
         setMicPermissionGranted(false);
         setMicStatus('denied');
+        setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
+        setTimeout(() => setErrorMessage(''), 5000);
+      } else if (event.error === 'no-speech') {
+        // Игнорируем ошибку отсутствия речи на мобильных устройствах
+        if (!isMobile) {
+          setText('Речь не обнаружена');
+        }
+      } else if (event.error === 'audio-capture') {
+        setErrorMessage('Ошибка захвата аудио. Проверьте подключение микрофона.');
+        setTimeout(() => setErrorMessage(''), 5000);
       }
       setIsListening(false);
     };
 
-    recognitionRef.current.onend = () => {
-      if (isListening) {
-        recognitionRef.current?.start();
-      }
+    recognitionRef.current.onresult = (event: any) => {
+      const results = event.results;
+      const last = results[results.length - 1];
+      const transcript = last[0].transcript.trim();
+      
+      setText(transcript);
+      handleVoiceCommand(transcript);
     };
 
     // Обработка потери фокуса на мобильных устройствах
@@ -129,15 +158,23 @@ const VoiceAssistant = () => {
       }
     };
 
+    const handleFocus = () => {
+      if (micPermissionGranted && !isListening) {
+        setIsListening(true);
+      }
+    };
+
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
     };
-  }, [isListening]);
+  }, [isListening, micPermissionGranted]);
 
   const requestMicPermission = useCallback(async () => {
     try {
@@ -498,35 +535,54 @@ const VoiceAssistant = () => {
   }, []);
 
   const handleMicClick = useCallback(async () => {
+    if (!isSupported) {
+      setErrorMessage('Ваш браузер не поддерживает распознавание речи');
+      setTimeout(() => setErrorMessage(''), 5000);
+      return;
+    }
+
     if (micStatus === 'idle' || micStatus === 'denied') {
       setMicStatus('requested');
-      setText('Запрашиваю доступ к микрофону...');
+      setText('Запрос доступа к микрофону...');
+      
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
-        setMicStatus('granted');
+        
         setMicPermissionGranted(true);
-        setIsListening(true);
-        setText('Микрофон включен. Говорите...');
-        setSuccessMessage('Доступ к микрофону получен');
-        setTimeout(() => setSuccessMessage(''), 3000);
+        setMicStatus('granted');
+        setText('Доступ к микрофону получен');
+        setTimeout(() => setText(''), 3000);
+        
+        if (recognitionRef.current) {
+          recognitionRef.current.start();
+          setIsListening(true);
+        }
       } catch (error) {
-        console.error('Microphone access denied:', error);
-        setMicStatus('denied');
+        console.error('Ошибка доступа к микрофону:', error);
         setMicPermissionGranted(false);
-        setIsListening(false);
-        setText('Нет доступа к микрофону');
-        setErrorMessage('Для работы голосового управления необходим доступ к микрофону. Разрешите доступ в настройках браузера.');
+        setMicStatus('denied');
+        setErrorMessage('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.');
         setTimeout(() => setErrorMessage(''), 5000);
       }
     } else if (micStatus === 'granted') {
-      setIsListening(prev => {
-        const newState = !prev;
-        setText(newState ? 'Микрофон включен. Говорите...' : 'Микрофон выключен');
-        return newState;
-      });
+      if (isListening) {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+        setText('Микрофон выключен');
+      } else {
+        try {
+          recognitionRef.current?.start();
+          setIsListening(true);
+          setText('Микрофон включен');
+        } catch (error) {
+          console.error('Ошибка запуска распознавания:', error);
+          setErrorMessage('Ошибка запуска микрофона. Попробуйте перезагрузить страницу.');
+          setTimeout(() => setErrorMessage(''), 5000);
+        }
+      }
     }
-  }, [micStatus]);
+  }, [isSupported, micStatus, isListening]);
 
   const handleTeamCountChange = useCallback((value: number) => {
     setTeamCount(Math.max(1, Math.min(10, value)));
