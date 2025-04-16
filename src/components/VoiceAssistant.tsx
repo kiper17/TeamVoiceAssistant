@@ -146,6 +146,7 @@ const VoiceAssistant = () => {
       const last = results[results.length - 1];
       const transcript = last[0].transcript.trim();
       
+      console.log('Распознано:', transcript);
       setText(transcript);
       handleVoiceCommand(transcript);
     };
@@ -339,7 +340,9 @@ const VoiceAssistant = () => {
     }
 
     const normalizedCommand = command.toLowerCase().trim();
+    console.log('Обработка команды:', normalizedCommand);
     
+    // Команды управления микрофоном
     if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
       setIsListening(false);
       setText('Микрофон выключен');
@@ -354,70 +357,74 @@ const VoiceAssistant = () => {
       return;
     }
 
-    setText('Обработка команды...');
-
+    // Обработка команд с очками
     const pointsMatch = normalizedCommand.match(
-      /(команда|команде|команду|группа|группе|группу)\s+(\d+)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
+      /(команда|команде|команду|группа|группе|группу)\s*(\d+)\s*(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?/i
     );
 
     if (pointsMatch) {
-      const groupNumber = parseInt(pointsMatch[2]);
-      const operator = pointsMatch[3].toLowerCase();
-      let points = parseInt(pointsMatch[4]) || 1;
+      const teamNumber = parseInt(pointsMatch[2]);
+      const operation = pointsMatch[3].toLowerCase();
+      const points = parseInt(pointsMatch[4]) || 1;
       
-      if (operator.includes('минус') || operator === '-' || operator.includes('убрать') || operator.includes('снять')) {
-        points = -points;
-      }
-      
-      const groupToUpdate = teams.find(team => 
-        team.name === `Группа ${groupNumber}` || team.name === `Команда ${groupNumber}`
+      const teamToUpdate = teams.find(team => 
+        team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
       );
       
-      if (groupToUpdate) {
+      if (teamToUpdate) {
         try {
-          setText(`Обновление очков для ${groupToUpdate.name}...`);
-          await updateTeamPoints(groupToUpdate.id, points);
-          setText(`${groupToUpdate.name}: ${points > 0 ? '+' : ''}${points} очков`);
+          const delta = operation.includes('минус') || operation === '-' || 
+                       operation.includes('убрать') || operation.includes('снять') 
+                       ? -points : points;
+          
+          setText(`Обновление очков для ${teamToUpdate.name}: ${delta > 0 ? '+' : ''}${delta}`);
+          await updateTeamPoints(teamToUpdate.id, delta);
+          setSuccessMessage(`${teamToUpdate.name}: ${delta > 0 ? '+' : ''}${delta} очков`);
+          setTimeout(() => setSuccessMessage(''), 3000);
         } catch (error) {
-          setText(`Ошибка изменения очков для ${groupToUpdate.name}`);
+          console.error('Ошибка обновления очков:', error);
+          setErrorMessage(`Ошибка изменения очков для ${teamToUpdate.name}`);
+          setTimeout(() => setErrorMessage(''), 3000);
         }
       } else {
-        setText(`Группа/Команда ${groupNumber} не найдена`);
+        setErrorMessage(`Команда ${teamNumber} не найдена`);
+        setTimeout(() => setErrorMessage(''), 3000);
       }
       return;
     }
 
-    // Добавленные новые команды
+    // Команда сброса очков
     if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
-      const numberMatch = normalizedCommand.match(/(команда|группа)\s+(\d+)/i);
+      const numberMatch = normalizedCommand.match(/(команда|группа)\s*(\d+)/i);
       if (numberMatch) {
-        const groupNumber = parseInt(numberMatch[2]);
-        const groupToUpdate = teams.find(team => 
-          team.name === `Группа ${groupNumber}` || team.name === `Команда ${groupNumber}`
+        const teamNumber = parseInt(numberMatch[2]);
+        const teamToUpdate = teams.find(team => 
+          team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
         );
-        if (groupToUpdate) {
-          setText(`Сброс очков для ${groupToUpdate.name}...`);
-          await updateTeamPoints(groupToUpdate.id, -groupToUpdate.points);
-          setText(`Очки ${groupToUpdate.name} сброшены`);
+        if (teamToUpdate) {
+          try {
+            setText(`Сброс очков для ${teamToUpdate.name}`);
+            await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
+            setSuccessMessage(`Очки ${teamToUpdate.name} сброшены`);
+            setTimeout(() => setSuccessMessage(''), 3000);
+          } catch (error) {
+            console.error('Ошибка сброса очков:', error);
+            setErrorMessage(`Ошибка сброса очков для ${teamToUpdate.name}`);
+            setTimeout(() => setErrorMessage(''), 3000);
+          }
         } else {
-          setText(`Группа/Команда ${groupNumber} не найдена`);
+          setErrorMessage(`Команда ${teamNumber} не найдена`);
+          setTimeout(() => setErrorMessage(''), 3000);
         }
       } else {
-        setText('Не указан номер команды для сброса очков');
+        setErrorMessage('Не указан номер команды для сброса очков');
+        setTimeout(() => setErrorMessage(''), 3000);
       }
       return;
     }
 
-    if ((normalizedCommand.includes('удалить команду') || normalizedCommand.includes('удалить группу')) && normalizedCommand.match(/\d+/)) {
-      const matchResult = normalizedCommand.match(/\d+/);
-      if (matchResult) {
-        const groupNumber = parseInt(matchResult[0]);
-        setText(`Для удаления группы/команды ${groupNumber} подтвердите действие в интерфейсе`);
-        return;
-      }
-    }
-
-    setText(`Команда не распознана: "${normalizedCommand}"`);
+    setErrorMessage(`Команда не распознана: "${normalizedCommand}"`);
+    setTimeout(() => setErrorMessage(''), 3000);
   }, [currentUser, teams, isListening, updateTeamPoints]);
 
   const createTeams = useCallback(async () => {
