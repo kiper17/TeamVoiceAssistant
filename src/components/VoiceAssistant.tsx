@@ -45,7 +45,10 @@ const VoiceAssistant = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showInstruction, setShowInstruction] = useState(false);
-  const [hasSeenInstruction, setHasSeenInstruction] = useState(false);
+  const [hasSeenInstruction, setHasSeenInstruction] = useState(() => {
+    const saved = localStorage.getItem('hasSeenInstruction');
+    return saved ? JSON.parse(saved) : false;
+  });
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -631,6 +634,11 @@ const VoiceAssistant = () => {
       </div>
     </div>
   );
+
+  // Сохраняем состояние просмотра инструкции
+  useEffect(() => {
+    localStorage.setItem('hasSeenInstruction', JSON.stringify(hasSeenInstruction));
+  }, [hasSeenInstruction]);
 
   if (!isSupported) {
     return (
