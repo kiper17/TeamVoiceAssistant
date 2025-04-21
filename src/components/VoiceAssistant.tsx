@@ -239,6 +239,29 @@ const VoiceAssistant = () => {
   }, [isListening]);
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const appUser: User = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || 'Анонимный пользователь'
+        };
+        setCurrentUser(appUser);
+        setShowAuthForm(false);
+        if (!hasSeenInstruction) {
+          setShowInstruction(true);
+          setHasSeenInstruction(true);
+        }
+      } else {
+        setCurrentUser(null);
+        setShowAuthForm(true);
+        setShowInstruction(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [hasSeenInstruction]);
+
+  useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
       const user = JSON.parse(savedUser);
@@ -608,70 +631,6 @@ const VoiceAssistant = () => {
       </div>
     </div>
   );
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        const appUser: User = {
-          id: firebaseUser.uid,
-          name: firebaseUser.displayName || 'Анонимный пользователь'
-        };
-        setCurrentUser(appUser);
-        setShowAuthForm(false);
-        if (!hasSeenInstruction) {
-          setShowInstruction(true);
-          setHasSeenInstruction(true);
-        }
-      } else {
-        setCurrentUser(null);
-        setShowAuthForm(true);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [hasSeenInstruction]);
-
-  // Обновляем обработчик результатов распознавания
-  useEffect(() => {
-    if (!recognitionRef.current) return;
-
-    recognitionRef.current.onstart = () => {
-      console.log('Распознавание речи начато');
-      setIsListening(true);
-    };
-
-    recognitionRef.current.onend = () => {
-      console.log('Распознавание речи завершено');
-      setIsListening(false);
-      setText('Микрофон выключен');
-    };
-
-    recognitionRef.current.onerror = (event: any) => {
-      console.error('Ошибка распознавания:', event.error);
-      if (event.error === 'no-speech') {
-        setText('Речь не обнаружена');
-      } else if (event.error === 'not-allowed') {
-        setMicPermissionGranted(false);
-        setMicStatus('denied');
-        setErrorMessage('Доступ к микрофону запрещен');
-      } else {
-        setErrorMessage(`Ошибка распознавания: ${event.error}`);
-      }
-      setTimeout(() => setErrorMessage(''), 3000);
-      setIsListening(false);
-      setText('Микрофон выключен');
-    };
-
-    recognitionRef.current.onresult = (event: any) => {
-      const results = event.results;
-      const last = results[results.length - 1];
-      const transcript = last[0].transcript.trim();
-      
-      console.log('Распознано:', transcript);
-      setText(transcript);
-      handleVoiceCommand(transcript);
-    };
-  }, [handleVoiceCommand]);
 
   if (!isSupported) {
     return (
