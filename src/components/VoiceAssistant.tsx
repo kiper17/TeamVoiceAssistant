@@ -45,10 +45,6 @@ const VoiceAssistant = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showInstruction, setShowInstruction] = useState(false);
-  const [hasSeenInstruction, setHasSeenInstruction] = useState(() => {
-    const saved = localStorage.getItem('hasSeenInstruction');
-    return saved ? JSON.parse(saved) : false;
-  });
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -250,10 +246,7 @@ const VoiceAssistant = () => {
         };
         setCurrentUser(appUser);
         setShowAuthForm(false);
-        if (!hasSeenInstruction) {
-          setShowInstruction(true);
-          setHasSeenInstruction(true);
-        }
+        setShowInstruction(true);
       } else {
         setCurrentUser(null);
         setShowAuthForm(true);
@@ -262,7 +255,7 @@ const VoiceAssistant = () => {
     });
 
     return () => unsubscribe();
-  }, [hasSeenInstruction]);
+  }, []);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -634,11 +627,6 @@ const VoiceAssistant = () => {
       </div>
     </div>
   );
-
-  // Сохраняем состояние просмотра инструкции
-  useEffect(() => {
-    localStorage.setItem('hasSeenInstruction', JSON.stringify(hasSeenInstruction));
-  }, [hasSeenInstruction]);
 
   if (!isSupported) {
     return (
