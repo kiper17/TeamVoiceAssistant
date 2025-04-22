@@ -349,6 +349,22 @@ const VoiceAssistant = () => {
     }
   }, [currentUser, isProcessing]);
 
+  const textToNumber = (text: string): number => {
+    const numberMap: { [key: string]: number } = {
+      'один': 1, 'одна': 1, 'одно': 1,
+      'два': 2, 'две': 2,
+      'три': 3,
+      'четыре': 4,
+      'пять': 5,
+      'шесть': 6,
+      'семь': 7,
+      'восемь': 8,
+      'девять': 9,
+      'десять': 10
+    };
+    return numberMap[text.toLowerCase()] || parseInt(text);
+  };
+
   const handleVoiceCommand = useCallback(async (command: string) => {
     if (!currentUser || teams.length === 0) {
       setText('Ошибка: нет активного пользователя или команд');
@@ -375,13 +391,13 @@ const VoiceAssistant = () => {
 
     // Обработка команд с очками
     const pointsMatch = normalizedCommand.match(
-      /(команда|команде|команду|группа|группе|группу)\s*(\d+)\s*(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s*(\d+)?\s*(очков|очка|очко)?/i
+      /(команда|команде|команду|группа|группе|группу)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)\s*(очков|очка|очко)?/i
     );
 
     if (pointsMatch) {
-      const teamNumber = parseInt(pointsMatch[2]);
+      const teamNumber = textToNumber(pointsMatch[2]);
       const operation = pointsMatch[3].toLowerCase();
-      const points = parseInt(pointsMatch[4]) || 1;
+      const points = textToNumber(pointsMatch[4]);
       
       const teamToUpdate = teams.find(team => 
         team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
@@ -411,9 +427,9 @@ const VoiceAssistant = () => {
 
     // Команда сброса очков
     if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
-      const numberMatch = normalizedCommand.match(/(команда|группа)\s*(\d+)/i);
+      const numberMatch = normalizedCommand.match(/(команда|группа)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)/i);
       if (numberMatch) {
-        const teamNumber = parseInt(numberMatch[2]);
+        const teamNumber = textToNumber(numberMatch[2]);
         const teamToUpdate = teams.find(team => 
           team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
         );
