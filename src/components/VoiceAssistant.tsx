@@ -45,6 +45,7 @@ const VoiceAssistant = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showInstruction, setShowInstruction] = useState(false);
+  const [isProcessingCommand, setIsProcessingCommand] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -144,7 +145,11 @@ const VoiceAssistant = () => {
       
       console.log('Распознано:', transcript);
       setText(transcript);
-      handleVoiceCommand(transcript);
+      
+      // Добавляем небольшую задержку перед обработкой команды
+      setTimeout(() => {
+        handleVoiceCommand(transcript);
+      }, 100);
     };
 
     // Обработка потери фокуса на мобильных устройствах
@@ -366,45 +371,46 @@ const VoiceAssistant = () => {
   };
 
   const handleVoiceCommand = useCallback(async (command: string) => {
-    if (!currentUser || teams.length === 0) {
-      setText('Ошибка: нет активного пользователя или команд');
+    if (!currentUser || teams.length === 0 || isProcessingCommand) {
+      console.log('Пропуск команды:', { currentUser, teamsLength: teams.length, isProcessingCommand });
       return;
     }
 
+    setIsProcessingCommand(true);
     const normalizedCommand = command.toLowerCase().trim();
     console.log('Обработка команды:', normalizedCommand);
     
-    // Команды управления микрофоном
-    if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
-      setIsListening(false);
-      setText('Микрофон выключен');
-      return;
-    }
-
-    if (normalizedCommand.includes('старт') || normalizedCommand.includes('начать')) {
-      if (!isListening) {
-        setIsListening(true);
-        setText('Микрофон включен');
+    try {
+      // Команды управления микрофоном
+      if (normalizedCommand.includes('стоп') || normalizedCommand.includes('хватит')) {
+        setIsListening(false);
+        setText('Микрофон выключен');
+        return;
       }
-      return;
-    }
 
-    // Обработка команд с очками
-    const pointsMatch = normalizedCommand.match(
-      /(команда|команде|команду|группа|группе|группу)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)\s*(очков|очка|очко)?/i
-    );
+      if (normalizedCommand.includes('старт') || normalizedCommand.includes('начать')) {
+        if (!isListening) {
+          setIsListening(true);
+          setText('Микрофон включен');
+        }
+        return;
+      }
 
-    if (pointsMatch) {
-      const teamNumber = textToNumber(pointsMatch[2]);
-      const operation = pointsMatch[3].toLowerCase();
-      const points = textToNumber(pointsMatch[4]);
-      
-      const teamToUpdate = teams.find(team => 
-        team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
+      // Обработка команд с очками
+      const pointsMatch = normalizedCommand.match(
+        /(команда|команде|команду|группа|группе|группу)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)\s+(дать|добавить|убрать|снять|плюс|минус|\+|\-)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)\s*(очков|очка|очко)?/i
       );
-      
-      if (teamToUpdate) {
-        try {
+
+      if (pointsMatch) {
+        const teamNumber = textToNumber(pointsMatch[2]);
+        const operation = pointsMatch[3].toLowerCase();
+        const points = textToNumber(pointsMatch[4]);
+        
+        const teamToUpdate = teams.find(team => 
+          team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
+        );
+        
+        if (teamToUpdate) {
           const delta = operation.includes('минус') || operation === '-' || 
                        operation.includes('убрать') || operation.includes('снять') 
                        ? -points : points;
@@ -413,51 +419,50 @@ const VoiceAssistant = () => {
           await updateTeamPoints(teamToUpdate.id, delta);
           setSuccessMessage(`${teamToUpdate.name}: ${delta > 0 ? '+' : ''}${delta} очков`);
           setTimeout(() => setSuccessMessage(''), 3000);
-        } catch (error) {
-          console.error('Ошибка обновления очков:', error);
-          setErrorMessage(`Ошибка изменения очков для ${teamToUpdate.name}`);
-          setTimeout(() => setErrorMessage(''), 3000);
-        }
-      } else {
-        setErrorMessage(`Команда ${teamNumber} не найдена`);
-        setTimeout(() => setErrorMessage(''), 3000);
-      }
-      return;
-    }
-
-    // Команда сброса очков
-    if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
-      const numberMatch = normalizedCommand.match(/(команда|группа)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)/i);
-      if (numberMatch) {
-        const teamNumber = textToNumber(numberMatch[2]);
-        const teamToUpdate = teams.find(team => 
-          team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
-        );
-        if (teamToUpdate) {
-          try {
-            setText(`Сброс очков для ${teamToUpdate.name}`);
-            await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
-            setSuccessMessage(`Очки ${teamToUpdate.name} сброшены`);
-            setTimeout(() => setSuccessMessage(''), 3000);
-          } catch (error) {
-            console.error('Ошибка сброса очков:', error);
-            setErrorMessage(`Ошибка сброса очков для ${teamToUpdate.name}`);
-            setTimeout(() => setErrorMessage(''), 3000);
-          }
         } else {
           setErrorMessage(`Команда ${teamNumber} не найдена`);
           setTimeout(() => setErrorMessage(''), 3000);
         }
-      } else {
-        setErrorMessage('Не указан номер команды для сброса очков');
-        setTimeout(() => setErrorMessage(''), 3000);
+        return;
       }
-      return;
-    }
 
-    setErrorMessage(`Команда не распознана: "${normalizedCommand}"`);
-    setTimeout(() => setErrorMessage(''), 3000);
-  }, [currentUser, teams, isListening, updateTeamPoints]);
+      // Команда сброса очков
+      if (normalizedCommand.includes('сбросить очки') || normalizedCommand.includes('обнулить')) {
+        const numberMatch = normalizedCommand.match(/(команда|группа)\s+(\d+|один|два|три|четыре|пять|шесть|семь|восемь|девять|десять)/i);
+        if (numberMatch) {
+          const teamNumber = textToNumber(numberMatch[2]);
+          const teamToUpdate = teams.find(team => 
+            team.name === `Группа ${teamNumber}` || team.name === `Команда ${teamNumber}`
+          );
+          if (teamToUpdate) {
+            setText(`Сброс очков для ${teamToUpdate.name}`);
+            await updateTeamPoints(teamToUpdate.id, -teamToUpdate.points);
+            setSuccessMessage(`Очки ${teamToUpdate.name} сброшены`);
+            setTimeout(() => setSuccessMessage(''), 3000);
+          } else {
+            setErrorMessage(`Команда ${teamNumber} не найдена`);
+            setTimeout(() => setErrorMessage(''), 3000);
+          }
+        } else {
+          setErrorMessage('Не указан номер команды для сброса очков');
+          setTimeout(() => setErrorMessage(''), 3000);
+        }
+        return;
+      }
+
+      setErrorMessage(`Команда не распознана: "${normalizedCommand}"`);
+      setTimeout(() => setErrorMessage(''), 3000);
+    } catch (error) {
+      console.error('Ошибка обработки команды:', error);
+      setErrorMessage('Ошибка обработки команды');
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      // Добавляем небольшую задержку перед обработкой следующей команды
+      setTimeout(() => {
+        setIsProcessingCommand(false);
+      }, 500);
+    }
+  }, [currentUser, teams, isListening, updateTeamPoints, isProcessingCommand]);
 
   const createTeams = useCallback(async () => {
     if (!currentUser) {
