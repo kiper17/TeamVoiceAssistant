@@ -577,11 +577,8 @@ const VoiceAssistant = () => {
         setText('Доступ к микрофону получен');
         setTimeout(() => setText(''), 3000);
         
-        if (recognitionRef.current) {
-          recognitionRef.current.start();
-          setIsListening(true);
-          setText('Микрофон включен. Говорите...');
-        }
+        setIsListening(true);
+        setText('Микрофон включен. Говорите...');
       } catch (error) {
         console.error('Ошибка доступа к микрофону:', error);
         setMicPermissionGranted(false);
@@ -591,11 +588,9 @@ const VoiceAssistant = () => {
       }
     } else if (micStatus === 'granted') {
       if (isListening) {
-        recognitionRef.current?.stop();
         setIsListening(false);
         setText('Микрофон выключен');
       } else {
-        recognitionRef.current?.start();
         setIsListening(true);
         setText('Микрофон включен. Говорите...');
       }
